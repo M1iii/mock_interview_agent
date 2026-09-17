@@ -27,7 +27,7 @@
 
 ## 3. 当前阶段
 
-**阶段：P2 交付完成 + 端到端验收通过（2026-09-17）——简历解析入库（P2-1）/ 双来源出题（P2-2）/ SqliteSaver 跨重启持久化（P2-3）/ web_verify 事实核验（P2-4）/ 端到端链路（P2-5）全部落地，独立脚本 `_acceptance_p2.py` 实测 passed=12 failed=0；P1-3（28%）与 P1-4 decline 子项搁置项顺延，待真实检索环境恢复后复测**
+**阶段：P2 交付完成 + 端到端验收通过（2026-09-17）——简历解析入库（P2-1）/ 双来源出题（P2-2）/ SqliteSaver 跨重启持久化（P2-3）/ web_verify 事实核验（P2-4）/ 端到端链路（P2-5）全部落地，独立脚本 `_acceptance_p2.py` 审查修复轮（F3/F4/F6）后复跑实测 passed=13 failed=0（P2-5 第 1 题核验已真实触发）；P1-3（28%）与 P1-4 decline 子项搁置项顺延，待真实检索环境恢复后复测**
 
 P2 交付物：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF）+ 金标 `tests/acceptance/resume_gold.json`；验收脚本 `_acceptance_p2.py`（`--only`/`--keep` + 退出码 0/1 + 默认清理验收数据）；后端简历域（解析/抽取/考点清单/双来源出题/持久化/核验）与前端简历页 + 会话关联 + 核验展示。
 
@@ -35,7 +35,7 @@ P2 交付物：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF）+ 
 
 **实测项延后决策（2026-09-16）**：A-4 浏览器控制台无报错 / N-1 性能 P95 / N-6 浏览器兼容 / P0-2 二十轮串扰与 P0-5 五并发压测，统一留待阶段收尾实测——N-1 待 P1 检索链路稳定后测更准（回复耗时构成将加入检索耗时）；A-4 在 P1 前端开发时随手自查。
 
-**P2 收尾环境偏差（2026-09-17）**：本次 P2 验收开始时 Qdrant(6333)/ES(9200)/TEI(8081) 均未监听（Docker Desktop 未运行；沙箱内无法启动 Docker Desktop，其数据目录访问被拦截），故 P2-1~P2-5 全部在不依赖检索服务的路径下完成（P2 五项本身不要求真实检索；P2-5 的 kb 检索路已在缺失时静默降级）；**P1 验收脚本复跑因此无法执行**，P1 侧回归证据为 pytest 全量（266 例）+ ruff + 前端 build，P1-3/P1-4 既有 FAIL 记录维持不变。
+**P2 收尾环境偏差（2026-09-17）**：本次 P2 验收开始时 Qdrant(6333)/ES(9200)/TEI(8081) 均未监听（Docker Desktop 未运行；沙箱内无法启动 Docker Desktop，其数据目录访问被拦截），故 P2-1~P2-5 全部在不依赖检索服务的路径下完成（P2 五项本身不要求真实检索；P2-5 的 kb 参数在缺失时被显式省略并静默降级）；**P2-5 的事实核验为真实触发**（自设占位 verify-key + `BochaClient.search` 补丁，走通 LLM 判定 → 搜索 → 二次判定全链路，不依赖检索服务）；**P1 验收脚本复跑因此无法执行**，P1 侧回归证据为 pytest 全量（266 例）+ ruff + 前端 build，P1-3/P1-4 既有 FAIL 记录维持不变。
 
 ## 4. 已完成事项
 
@@ -88,8 +88,9 @@ P2 交付物：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF）+ 
 - [x] P2 Task 8：web_verify 后端（2026-09-17，P2-4）：`app/verify/bocha.py`（博查 Web Search 客户端，Key 缺失/网络异常抛 `BochaError`）+ `app/verify/verify.py`（LLM 事实性判定 → 搜索 → LLM 二次判定三态 verified/uncertain/unconfirmed）+ `evaluate_node` 接入 + `PUT/GET /api/settings/verify-key`；未配置 Key / 失败一律静默降级不阻断评估
 - [x] P2 Task 9：前端·简历管理页 + 会话关联（2026-09-17，P2-1/P2-2 UI）：`web/src/views/ResumeView.vue`（上传/状态轮询/重试/删除）+ ChatView 新建会话支持面试类型与简历下拉 + `api/client.ts` 简历接口；轮询对齐 KnowledgeView 模式（setInterval + 卸载清理）
 - [x] P2 Task 10：前端·核验展示 + 搜索 Key 配置 + 报告汇总（2026-09-17，P2-4 UI）：评估面板核验徽标与信源列表 + 配置页搜索 Key 区块 + 报告页核验汇总（`ReportSummary.verified` 类型修正为 `{question, reason}[]`，由系统在摘要解析后填充）
-- [x] P2 Task 11：端到端验收 + 语料 + 文档落档（2026-09-17，P2-5）：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF，手写最小合法 PDF 文字层）+ 金标 `tests/acceptance/resume_gold.json`（20 stem：file_name/name/skills≥5/points≥10）+ 独立验收脚本 `_acceptance_p2.py` + PRD 四处漂移修订核验 + CHANGELOG / 本文档落档
-- [x] P2 端到端验收执行（2026-09-17）：`uv run python _acceptance_p2.py` → **passed=12 failed=0（退出码 0）**：P2-1 解析成功率 20/20=100%、字段命中 20/20=100%、考点清单落表一致；P2-2 考点清单 ≥10 全通过、配比复算 [1,4,7]/[1,2,3,4,6,7,8,9]/[1,3,5,7,9]、简历来源题干含考点关键词 38/40=95%（题干命中 3/3）；P2-3 会话记录 + 对话历史（同库重建）恢复；P2-4 事实核验 status=verified（3 claims / 6 sources）+ 未配置 Key 跳过（verification=null）；P2-5 端到端（报告 1402 字符 + 结构化摘要 dict + GET /report 200）；**本次无 FAIL 项**（详见 CHANGELOG 顶部条目）
+- [x] P2 Task 11：端到端验收 + 语料 + 文档落档（2026-09-17，P2-5）：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF，手写最小合法 PDF 文字层）+ 金标 `tests/acceptance/resume_gold.json`（20 stem：file_name/name/skills≥5/points≥10）+ 独立验收脚本 `_acceptance_p2.py` + PRD 四处漂移修订（含 §8 清空，`docs/prd.md` 5 处改动）随本提交纳入版本控制并逐条核验 + CHANGELOG / 本文档落档
+- [x] P2 端到端验收执行（2026-09-17，首轮）：`uv run python _acceptance_p2.py` → **passed=12 failed=0（退出码 0）**：P2-1 解析成功率 20/20=100%、字段命中 20/20=100%、考点清单落表一致；P2-2 考点清单 ≥10 全通过、配比复算 [1,4,7]/[1,2,3,4,6,7,8,9]/[1,3,5,7,9]、简历来源题干含考点关键词 38/40=95%（题干命中 3/3）；P2-3 会话记录 + 对话历史（同库重建）恢复；P2-4 事实核验 status=verified（3 claims / 6 sources）+ 未配置 Key 跳过（verification=null）；P2-5 端到端（报告 1402 字符 + 结构化摘要 dict + GET /report 200）；**本次无 FAIL 项**（详见 CHANGELOG 顶部条目）
+- [x] P2 验收审查修复（2026-09-17，第 1 轮，F3/F4/F6/F7 + limitation 落档）：**F3** P2-5 自设占位 verify-key + `BochaClient.search` 补丁，第 1 题真实走通 VerifyContext 全链路（新增独立断言项），报告断言补强为「含『面试报告』+ `_report_summary` 5 键齐全 + total_score 0–100 + 四维键齐全」，`finally` 还原补丁与 Key；**F4** P2-4 未配置 Key 对照组复用同一条 answer + 旁证 `GET verify-key → is_set=False`；**F6** 本次上传 resume_id 显式记录，P2-1/P2-2/P2-5 只使用本次上传 id，清理只删本次上传的记录与文件；**F7** 更正 CHANGELOG/本文档中 PRD 修订的表述（原文与实际提交 `docs/prd.md` 5 处改动不符）；**F1/F2/F5/F8** 落档为 §5 limitation。复跑 `_acceptance_p2.py` → **passed=13 failed=0**（P2-1 19/20=95%[首份 LLM 抽取超时，非应用缺陷] / P2-2 注入链路一致性 40/45=89% / P2-4 同一 answer 对照 / **P2-5 核验 status=verified、claims 3、sources 6**、报告 1864 字符 + 摘要四维齐全）；`pytest 266` + `ruff` 全通过；未改任何 `app/` 代码
 
 ## 5. 已知问题 / 待确认 / 风险
 
@@ -102,6 +103,10 @@ P2 交付物：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF）+ 
 | 环境阻塞·P1 复跑 | 本次收尾 Qdrant(6333)/ES(9200)/TEI(8081) 未监听（Docker Desktop 未运行，且 TRAE 沙箱拦截 Docker Desktop 数据目录致无法启动）→ `_acceptance_p1.py` 复跑无法执行；P1 侧回归证据降级为 pytest 266 例 + ruff + 前端 build（P1-3/P1-4 既有 FAIL 记录不变） | 待用户在真实环境启动三服务后复跑 P1 并复测两项搁置 |
 | 已知限制 | P0 断点续聊为内存态，后端重启会话丢失（前端提示） | 已由 P2 Task 2/3 解决（会话元数据 + checkpoint 落 SQLite） |
 | 已知限制 | P0 会话元数据存内存，重启后会话列表清空 | 已由 P2 Task 2 解决（sessions 表落 SQLite interview.db） |
+| limitation·F1 | P2-2「题干含金标考点关键词 40/45=89%」口径为**注入链路一致性**（fake LLM 原样回显考点清单块），不是真实「题目与清单相关性」证据 | 真实相关性待后续用真实 LLM 抽样判定 |
+| limitation·F2 | P2 语料与 gold 均由实现者自产自标（规整纯文本），P2-1 95% / P2-2 89% 只能证明「自产规整样本链路可通」，不能外推到真实复杂版式/扫描件；字段命中口径为「name 子串 + skills 任意 ≥1 命中」，判决力有限 | 建议后续补真实来源简历（含复杂版式/扫描件）复测 |
+| limitation·F8 | 2 份 PDF 语料为纯 ASCII（规避 CJK 字面串编码风险），**中文 PDF 解析链路未覆盖** | 后续补中文 PDF 语料（含 CJK 字体嵌入）复测 |
+| limitation·F5 | P2-3 为「进程内跨实例恢复 + noop 合成图 + 临时库」，**未覆盖**真实 interview 图 / lifespan / API 恢复路径 | 后续可在真实 uvicorn 进程重启场景复测（Windows 环境不稳定，暂搁置） |
 | 风险 | 全局单流式为进程内锁，多进程部署需换外部锁 | 已知扩展点，当前单进程无影响 |
 | 风险 | DeepSeek 限流触发时按 R2 重试 + fallback | 验收基线需正常配额 |
 | 环境注意 | TRAE 沙箱对 `~/.cache` 与 `%LOCALAPPDATA%\Temp` 只读，pre-commit 需重定向 `PRE_COMMIT_HOME`/`TMP`/`TEMP` 到项目内 `.tmp/` 并以 Conda base Python（`D:\miniconda\python.exe -m pre_commit`）运行 | 步骤 1 已绕行，后续会话沿用；git commit 钩子同样受限（P2 收尾沿用） |
@@ -202,3 +207,4 @@ P2 交付物：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF）+ 
 - 2026-09-17 P2 Task 1~10 完成（配置扩展 / 会话元数据 SQLite / SqliteSaver / 简历域存储 / 解析抽取 / 简历 API / 双来源出题 / web_verify / 前端简历页·会话关联·核验展示）→ CHANGELOG + §4
 - 2026-09-17 P2 Task 11 端到端验收通过（`_acceptance_p2.py` passed=12 failed=0）+ PRD 四处漂移修订核验（§4 F3 / §5 R4 / §6 P2 / §6 N-9 + §8）→ CHANGELOG + §3/§4/§5
 - 2026-09-17 P2 收尾环境偏差记录：Qdrant/ES/TEI 未监听致 P1 复跑无法执行（沙箱无法启动 Docker Desktop），P1 既有 FAIL 维持 → §3/§5
+- 2026-09-17 P2 验收审查修复（第 1 轮）：F3 核验端到端（P2-5 自设 verify-key + 搜索补丁，真实走通 VerifyContext 全链路 + 报告摘要必备键/四维校验 + finally 还原）；F4 对照组收紧（同一 answer + `is_set=False` 旁证）；F6 验收数据隔离（只用本次上传 resume_id）；F7 更正 PRD 修订表述（实际 5 处改动随 20216a5 提交）；F1/F2/F5/F8 落档 limitation → CHANGELOG + §3/§4/§5

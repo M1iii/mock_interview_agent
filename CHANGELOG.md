@@ -1,15 +1,44 @@
 # CHANGELOG
 
+## 2026-09-17 · P2 验收审查修复（F3 核验端到端 / F4 对照收紧 / F6 数据隔离 / F7 表述更正 + limitation 落档）
+
+**描述**：针对 Task 11 验收审查（approve + 修复项）执行第 1 轮修复，**只改验收脚本与文档，未改任何 `app/` 代码**。① **F3（规格偏离，最高优先级）**：原脚本 P2-4 第二步把 verify-key 置空且不还原，`all` 顺序下 P2-5 必然跳过核验，导致「P2-5 第 1 题提交事实性回答触发核验 + 报告含核验展示字段」未被端到端覆盖。现 P2-5 自设占位 verify-key（`bocha-acceptance`）并补丁 `BochaClient.search`，使第 1 题真实走通 VerifyContext 全链路（LLM 事实性判定 → 搜索 → LLM 二次判定），新增独立断言项（verification 非空 + status ∈ 三态合法值 + sources/claims 非空），并在 `finally` 还原补丁与 verify-key。② **F4**：P2-4 未配置 Key 对照组改为**复用与第 1 步完全相同的 answer**（同一输入对照），并旁证 `GET /api/settings/verify-key` → `is_set=False`，排除「LLM 判为非事实性」的混淆解释。③ **F6**：显式记录本次运行上传的 resume_id，P2-1 统计 / P2-2 抽样 / P2-5 建会话只使用本次上传的 id（不再按全表 created_at DESC 取头部），清理只删本次上传的记录与文件。④ **F7**：更正 CHANGELOG / project-status 中与提交事实不符的表述（原称 PRD 修订「已在 P2 早期落地、本次核验一致（无偏差、未再改动）」，实际 20216a5 含 `docs/prd.md` 5 处改动）。⑤ **F1/F2/F5/F8** 落档为 limitation（见文末小节）。
+
+**变更内容**
+- `_acceptance_p2.py`：新增 `_run_uploads` / `_scoped_ready`（取样口径 `run`/`corpus` 显式标注并打日志）、`_kb_id_if_available`（检索服务未监听 → 省略 kb，静默降级）、`_check_report_summary`（`_report_summary` 必备键 + `total_score` 0–100 + 四维键校验，`沟通表达`/`表达清晰度` 别名容错）、`_session_status`（skip 循环与收口自适应：末题 skip 自动出报告时改走 `GET /report`，不再误判为 finish 400）；P2-1 改以 `_uploaded_by_name` 映射取本次上传记录（删除全表扫描的 `_rid_of`）；P2-2 指标口径按 F1 标注为「注入链路一致性」；P2-4 对照组复用同一 answer + is_set 旁证；P2-5 新增核验触发断言项 + `finally` 还原；cleanup 增 `_purge_upload_files` 兜底并接收 cfg
+- `CHANGELOG.md`：更正上一 P2 交付条目中 PRD 修订的表述（F7）；新增本条目（含 F1/F2/F5/F8 limitation）
+- `docs/project-status.md`：§3 阶段行实测更新为 passed=13；§4 追加本轮修复条目；§5 新增 F1/F2/F5/F8 limitation 行；§8 决策日志
+
+**验证结果**
+- `uv run python _acceptance_p2.py` → SUMMARY **passed=13 failed=0**（退出码 0；较上轮新增 1 项 P2-5 核验触发断言，故 12 → 13）：
+  - P2-1 解析成功率 **19/20 = 95%**（标准 ≥90%）PASS——`resume_01.md` 落 `failed`，原因为首份 LLM 抽取请求超时（`LLMError('LLM 请求失败（超时或网络异常）')`，耗时 78s），**非应用缺陷**：状态机正确落 failed、原文件保留可重试（R6 路径成立）；字段命中率 **19/19 = 100%**（≥85%）；考点清单落表一致 PASS
+  - P2-2 考点清单 ≥10（19 份 ready）；配比复算 `[1,4,7] / [1,2,3,4,6,7,8,9] / [1,3,5,7,9]`；注入链路一致性关键词覆盖 **40/45 = 89%**、题干命中 3/3（≥80%）
+  - P2-3 会话记录恢复 + 对话历史恢复（同库重建）PASS
+  - P2-4 已配置 Key + 搜索补丁：`status=verified`、claims 3 / sources 6；未配置 Key（**同一 answer 对照**）：`GET is_set=False` + `verification=null` PASS
+  - P2-5 第 1 题核验触发（VerifyContext 全链路）：`status=verified`、claims 3 / sources 6、`kb=None`（检索服务未监听 → 静默降级，核验不依赖检索）；报告正文 1864 字符含「面试报告」+ `_report_summary` 5 键齐全、`total_score=8`（0–100 数值）、四维键齐全；报告导出 `GET /report` 200 PASS
+- 回归：`uv run pytest tests -q` **266 passed**（15.42s，1 条三方 DeprecationWarning）；`uv run ruff check app/ tests/` 全通过
+- 隔离证据（日志）：P2-5 `[info] P2-5 取样简历=resume_02.md scope=run`（本次上传）、`[info] 检索服务未监听 → P2-5 省略 kb 参数`；测试用会话/简历/临时库均已清理
+
+**项目结构更新**
+- 修改：`_acceptance_p2.py`、`CHANGELOG.md`、`docs/project-status.md`
+- 未新增文件；未改 `app/` 与既有 `tests/*.py`
+
+**已知限制（limitation 落档）**
+- **F1｜P2-2 指标口径**：「题干含金标考点关键词」实际只验证 `ResumeStore → prompt` 的**注入链路一致性**（fake LLM 原样回显考点清单块），**不是**真实「题目与清单相关性」证据；真实相关性待后续用真实 LLM 抽样判定
+- **F2｜语料自产自标**：语料与 gold 均由实现者自产自标（规整纯文本），P2-1 95% / P2-2 89% 只能证明「自产规整样本链路可通」，不能外推到真实复杂版式 / 扫描件；字段命中口径为「name 子串 + skills 任意 ≥1 命中」，判决力有限；建议后续补真实来源简历
+- **F8｜PDF 语料覆盖**：2 份 PDF 语料为纯 ASCII（规避 CJK 字面串编码风险），**中文 PDF 解析链路未覆盖**
+- **F5｜P2-3 覆盖边界**：为「进程内跨实例恢复 + noop 合成图 + 临时库」，**未覆盖**真实 interview 图 / lifespan / API 恢复路径
+
 ## 2026-09-17 · P2 交付完成（简历解析/双来源出题/SqliteSaver 持久化/web_verify + 验收）
 
-**描述**：P2 阶段（Task 1~11）全部交付并通过端到端验收。① **简历域**：多格式上传（md/txt/docx/pdf，≤20MB）→ 轻量解析（pdfplumber + python-docx）→ LLM 结构化抽取（基本信息/技能/项目经历）+ 考点清单（≥10 项，独立成表支撑 COUNT 验收）→ 题面由出题节点实时生成（只持久化素材，不建题库）。② **双来源出题**：按面试类型配比落位（技术面 3 道 / 行为面 8 道 / 综合面 5 道，按 10 题计），降级链 简历→知识库→纯通用。③ **持久化**：会话元数据与 LangGraph checkpoint 同库落 SQLite（interview.db 异表），后端重启后会话列表、对话历史与续聊均恢复。④ **web_verify**：LLM 事实性判定 → 博查 Web Search → LLM 二次判定三态（verified/uncertain/unconfirmed，已确认为评估节点自动核验、静默降级），核验结果并入 SSE `assess` 事件与报告汇总。⑤ **前端**：简历管理页 + 会话关联（面试类型 + 简历下拉）+ 评估面板核验徽标/信源 + 配置页搜索 Key + 报告页核验汇总。验收：自建 20 份多格式简历语料与金标，独立脚本 `_acceptance_p2.py` 实测 **passed=12 failed=0**（退出码 0，本次无 FAIL 项）。PRD 四处漂移修订已在 P2 早期落地，本次核验一致（无偏差、未再改动）。
+**描述**：P2 阶段（Task 1~11）全部交付并通过端到端验收。① **简历域**：多格式上传（md/txt/docx/pdf，≤20MB）→ 轻量解析（pdfplumber + python-docx）→ LLM 结构化抽取（基本信息/技能/项目经历）+ 考点清单（≥10 项，独立成表支撑 COUNT 验收）→ 题面由出题节点实时生成（只持久化素材，不建题库）。② **双来源出题**：按面试类型配比落位（技术面 3 道 / 行为面 8 道 / 综合面 5 道，按 10 题计），降级链 简历→知识库→纯通用。③ **持久化**：会话元数据与 LangGraph checkpoint 同库落 SQLite（interview.db 异表），后端重启后会话列表、对话历史与续聊均恢复。④ **web_verify**：LLM 事实性判定 → 博查 Web Search → LLM 二次判定三态（verified/uncertain/unconfirmed，已确认为评估节点自动核验、静默降级），核验结果并入 SSE `assess` 事件与报告汇总。⑤ **前端**：简历管理页 + 会话关联（面试类型 + 简历下拉）+ 评估面板核验徽标/信源 + 配置页搜索 Key + 报告页核验汇总。验收：自建 20 份多格式简历语料与金标，独立脚本 `_acceptance_p2.py` 实测 **passed=12 failed=0**（退出码 0，本次无 FAIL 项）。PRD 四处漂移修订（含 §8 待确认项清空）随本提交一并纳入版本控制（`docs/prd.md` 共 5 处改动：§4 F3 / §5 R4 / §6 P2 / §6 N / §8），内容与目标文案逐条核验一致。
 
 **变更内容**
 - 语料 + 金标（新增）：`tests/acceptance/resumes/` 20 份（15 MD + 2 TXT + 1 DOCX + 2 PDF）；每份含基本信息 / 技能清单（≥6 项）/ 2-3 段项目经历（技术选型 + 难点）/ 工作经历，虚构人物（中文名或拼音），字段完整度分高/中/低三档；2 份 PDF 用最小合法 PDF 生成器手写文字层（对象流 + 正确 xref 偏移，不新增依赖；pdfplumber 实测抽取 873 / 693 字符）；`tests/acceptance/resume_gold.json`（20 个 stem 键：`file_name` / `basic.name` / `skills`≥5 / `points`≥10，取自简历原文）
 - 验收脚本（新增）：`_acceptance_p2.py`（项目根，不参与 pytest 收集）——仿 `_acceptance_p1.py`：Report 类 + `--only p2-1..p2-5|all` + `--keep` + 退出码 0/1 + 「标准/实测/结论」日志 + 默认清理（删验收简历记录与原文件、测试会话、恢复 verify-key、删 P2-3 临时库）。P2-1 用 `TestClient` 走真实上传流（Starlette 后台任务同步终态）+ `ResumeStore` 直读 `profile_json` / `points` 校验；P2-2 纯函数复算配比 + fake LLM（回显考点清单块）断言题干含 gold 考点关键词；P2-3 进程内模拟重启（`SqliteSessionStore` + `create_checkpointer` 同库重建两实例）；P2-4 占位 verify Key + `BochaClient.search` 类属性补丁（真实对话提交事实性回答）+ 未配置 Key 跳过路径；P2-5 端到端（简历关联会话 → 答 1 题 → skip 其余 → finish → 报告与导出）
 - 应用侧（Task 1~8 交付摘要，随本条目汇总归档）：`app/config.py` 增 interview/resume/verify 配置节 + env 覆盖；`langgraph-checkpoint-sqlite` 依赖；`app/store/sessions.py` `SqliteSessionStore`（interview_type/resume_id + 启动 Key 回退）；`app/store/checkpointer.py` SqliteSaver；`app/store/resume.py`（resumes + resume_points + 级联删）；`app/resume/{parsers,extract,tasks}.py`；`app/api/resume.py`（上传/列表/重试/删除）；`app/interview/ratio.py` + `ask_question_node` 双来源分支；`app/verify/{bocha,verify}.py` + `evaluate_node` 接入 + `PUT/GET /api/settings/verify-key`
 - 前端（Task 9/10 交付摘要）：`web/src/views/ResumeView.vue`（上传/轮询/重试/删除）+ ChatView 面试类型与简历关联 + 评估面板核验徽标与信源 + 配置页搜索 Key + 报告页核验汇总（`ReportSummary.verified` 类型为 `{question, reason}[]`，由系统在摘要解析后填充）
-- 文档漂移修订（P2 早期落地，本次核验一致）：`docs/prd.md` §4 F3（轻量解析 + 考点清单表述）、§5 R4（移除 `[P2 待确认触发方式]`，补「已确认：评估节点自动核验，静默降级」）、§6 P2（配比表述）、§6 N-9（上传分档 知识库 ≤50MB / 简历 ≤20MB）、§8（待确认项清空）
+- 文档漂移修订（随本提交纳入版本控制，逐条核验与目标文案一致）：`docs/prd.md` §4 F3（轻量解析 + 考点清单表述）、§5 R4（移除 `[P2 待确认触发方式]`，补「已确认：评估节点自动核验，静默降级」）、§6 P2（配比表述）、§6 N-9（上传分档 知识库 ≤50MB / 简历 ≤20MB）、§8（待确认项清空）
 - 文档落档：`docs/project-status.md`（§3 阶段 P2 完成 / §4 追加 P2 条目 / §5 已知问题 / §8 决策日志）、`CHANGELOG.md`
 
 **验证结果**
