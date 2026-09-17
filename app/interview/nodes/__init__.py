@@ -293,18 +293,42 @@ def _parse_report_summary(raw: str) -> dict | None:
     }
 
 
+def _build_verification_block(scores: list) -> str:
+    """汇总每题核验结论供报告生成（无核验时返回空串）。"""
+    rows = []
+    for s in scores:
+        v = s.get("verification") or {}
+        if not v or v.get("skipped"):
+            continue
+        status_label = {"verified": "已核验", "uncertain": "存疑", "unconfirmed": "无法确认"}.get(
+            v.get("status"), "无法确认"
+        )
+        rows.append(f"- {s.get('question', '')[:60]}：{status_label}（{v.get('reason', '')}）")
+    return "\n".join(rows)
+
+
 def report_node(state: InterviewState, llm: DeepSeekClient) -> dict:
     """报告：LLM 生成 Markdown 面试报告 + 末尾结构化摘要 JSON。"""
     scene = state.get("scene", "fulltime")
+    verification_block = _build_verification_block(state.get("scores", []))
     prompt = REPORT.format(
         scene=scene,
         question_count=state.get("question_count", 10),
         scores=state.get("scores", []),
+        verification_block=verification_block,
     )
     raw, _ = llm.complete_sync(api_key=state["_api_key"], prompt=prompt)
+    summary = _parse_report_summary(raw)
+    if summary is not None:
+        verified = []
+        for s in state.get("scores", []):
+            v = s.get("verification") or {}
+            if v and not v.get("skipped") and v.get("status") == "verified":
+                verified.append({"question": s.get("question", ""), "reason": v.get("reason", "")})
+        summary["verified"] = verified if verified else None
     return {
         "status": "finished",
         "messages": [AIMessage(content=raw)],
         "_report": raw,
-        "_report_summary": _parse_report_summary(raw),
+        "_report_summary": summary,
     }

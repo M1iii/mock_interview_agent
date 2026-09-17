@@ -9,6 +9,9 @@ REPORT = """\
 
 每题记录格式：{{question, answer, score, comment, dimensions, citations}}
 
+可选输入：事实性陈述联网核验结果汇总（无核验时为空）：
+{verification_block}
+
 请生成 Markdown 格式的面试报告，包含：
 1. 总分：四维平均分（0-10），换算为百分制
 2. 四维分项：各维度平均分 + 简评
@@ -30,5 +33,5 @@ REPORT = """\
   "review": [{{"question": "题干", "answer": "候选回答摘要", "comment": "一句话评语"}}],
   "verified": null
 }}
-verified 字段固定为 null（预留观点溯源校验，后续版本启用）。\
+verified 字段由系统填充：核验通过项列表或 null（无核验 / 未启用）。\
 """

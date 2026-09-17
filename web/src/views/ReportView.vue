@@ -234,6 +234,15 @@ onMounted(() => {
           </div>
         </div>
 
+        <div v-if="summary.verified && summary.verified.length" class="verify-summary">
+          <h3 class="col-title">事实核验</h3>
+          <ul class="verify-list">
+            <li v-for="(v, i) in summary.verified" :key="i">
+              <b>{{ v.question }}</b> — {{ v.reason }}
+            </li>
+          </ul>
+        </div>
+
         <div v-if="summary.review && summary.review.length" class="review">
           <h3 class="col-title">关键问题回顾</h3>
           <div class="md-table-wrap">
@@ -430,6 +439,29 @@ onMounted(() => {
 
 .review .md-table-wrap {
   margin-top: 12px;
+}
+
+.verify-summary {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.verify-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+.verify-list li {
+  margin: 4px 0;
+}
+
+.verify-list b {
+  color: var(--text-1);
+  font-weight: 600;
 }
 
 @media (max-width: 760px) {

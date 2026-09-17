@@ -133,6 +133,7 @@ function handleEvent(e: SSEEvent, streamingMsg?: Msg) {
       comment: e.comment,
       score: e.score,
       citations: e.citations || [],
+      verification: e.verification ?? null,
     }
   } else if (e.event === 'citations') {
     if (streamingMsg) {
@@ -395,6 +396,29 @@ function sceneLabel(scene: string): string {
                   </div>
                 </div>
               </div>
+            </div>
+            <div
+              v-if="hasAssess && assessData!.verification"
+              class="verify-box"
+            >
+              <div class="verify-head">
+                <span class="verify-badge" :class="assessData!.verification.status">
+                  {{
+                    assessData!.verification.status === 'verified' ? '已核验' :
+                    assessData!.verification.status === 'uncertain' ? '存疑' : '无法确认'
+                  }}
+                </span>
+                <span v-if="assessData!.verification.skipped" class="verify-skip">（已跳过核验）</span>
+              </div>
+              <p v-if="assessData!.verification.reason" class="verify-reason">{{ assessData!.verification.reason }}</p>
+              <ul
+                v-if="assessData!.verification.sources && assessData!.verification.sources.length"
+                class="verify-sources"
+              >
+                <li v-for="(src, i) in assessData!.verification.sources" :key="i">
+                  <a :href="src.url" target="_blank" rel="noopener">{{ src.title || src.url }}</a>
+                </li>
+              </ul>
             </div>
           </div>
           <p v-else class="side-placeholder">回答后由评估节点实时生成</p>
@@ -770,6 +794,66 @@ function sceneLabel(scene: string): string {
 .assess-cites .cite-text {
   font-size: 12px;
   line-height: 1.5;
+}
+
+.verify-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 12px;
+}
+
+.verify-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verify-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.verify-badge.verified {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.verify-badge.uncertain {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.verify-badge.unconfirmed {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.verify-skip {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.verify-reason {
+  margin: 6px 0 0;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.verify-sources {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.verify-sources li {
+  margin: 2px 0;
+}
+
+.verify-sources a {
+  color: #6d28d9;
 }
 
 .bubble {

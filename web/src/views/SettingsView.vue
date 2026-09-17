@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getApiKey, getEmbeddingConfig, setApiKey, setEmbeddingConfig } from '../api/client'
+import { getApiKey, getEmbeddingConfig, getVerifyKey, setApiKey, setEmbeddingConfig, setVerifyKey } from '../api/client'
 import type { EmbeddingConfig } from '../api/types'
 
 const router = useRouter()
@@ -38,6 +38,25 @@ const LOCAL_PRESET = {
   dims: 1024,
 }
 
+// ---- 联网搜索 Key（博查）----
+const verifyKey = ref('')
+const verifyMasked = ref('')
+
+async function loadVerifyKey() {
+  try {
+    const info = await getVerifyKey()
+    verifyMasked.value = info.masked_key
+  } catch {
+    // 忽略，保持默认态
+  }
+}
+
+async function saveVerifyKey() {
+  const info = await setVerifyKey(verifyKey.value.trim())
+  verifyMasked.value = info.masked_key
+  verifyKey.value = ''
+}
+
 const embChanged = computed(
   () =>
     embForm.value.provider !== (emb.value?.provider ?? '') ||
@@ -70,7 +89,10 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadVerifyKey()
+})
 
 async function save() {
   const value = keyInput.value.trim()
@@ -197,6 +219,35 @@ function goHome() {
         <button class="btn btn-primary" :disabled="saving" @click="save">
           {{ saving ? '保存中…' : '保存' }}
         </button>
+      </div>
+    </div>
+
+    <div class="card settings-card">
+      <h2 class="card-title">联网搜索 Key（博查）</h2>
+      <p class="card-desc">
+        可选填。用于评估环节对事实性回答进行联网核验；未配置时自动跳过核验，不影响面试流程。
+      </p>
+
+      <div class="field">
+        <label class="label" for="verify-key">搜索 Key</label>
+        <input
+          id="verify-key"
+          v-model="verifyKey"
+          class="input key-input"
+          type="password"
+          :placeholder="verifyMasked || '输入博查 API Key（留空保存可清除）'"
+          autocomplete="off"
+        />
+        <p class="field-hint">博查 Web Search API Key；留空并保存可清除已配置的 Key</p>
+      </div>
+
+      <div v-if="verifyMasked" class="current-key">
+        <span class="current-label">当前已配置：</span>
+        <code class="masked">{{ verifyMasked }}</code>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" @click="saveVerifyKey">保存</button>
       </div>
     </div>
 
