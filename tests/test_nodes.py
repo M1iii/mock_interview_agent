@@ -245,8 +245,8 @@ def test_ask_question_intern_search_query_default():
     assert nodes.retrieve.call_args.kwargs["kb_id"] == "kb-1"
 
 
-def test_build_reference_block_truncates_snippet():
-    """长片段截断到 _SNIPPET_LEN。"""
+def test_build_reference_block_no_truncation():
+    """父块全文不截断（_SNIPPET_LEN=0），完整注入 prompt。"""
     r = RetrievalResult(level=NORMAL)
     r.citations = [
         Citation(
@@ -259,8 +259,9 @@ def test_build_reference_block_truncates_snippet():
     ]
     block = _build_reference_block(r)
     assert "【参考资料】" in block
-    assert "…" in block
+    assert "…" not in block
     assert "[1]《doc.md》" in block
+    assert len("长" * 500) <= len(block)
 
 
 # --- evaluate ---

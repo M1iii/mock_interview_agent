@@ -51,8 +51,11 @@ def _qdrant_mock(hits):
     return qdrant
 
 
-def _es_mock(hits):
-    """hits: list of (parent_id, score, file_id, file_name, text)"""
+def _es_mock(hits, mget_texts=None):
+    """hits: list of (parent_id, score, file_id, file_name, text)
+
+    mget_texts: parent_id -> 父块全文（缺省取 hits 中同 id 的 text）。
+    """
     es = MagicMock()
     es.index = "kb_blocks"
 
@@ -76,7 +79,15 @@ def _es_mock(hits):
     def _search(*args, **kwargs):
         return {"hits": {"hits": es_hits, "max_score": max_score}}
 
+    def _mget(*args, **kwargs):
+        ids = set(kwargs.get("ids") or [])
+        texts = mget_texts or {h["_id"]: h["_source"]["text"] for h in es_hits}
+        return {
+            "docs": [{"_id": pid, "_source": {"text": texts[pid]}} for pid in ids if pid in texts]
+        }
+
     es.get_client.return_value.search = _search
+    es.get_client.return_value.mget = _mget
     es.is_available.return_value = True
     return es
 
@@ -237,6 +248,7 @@ def test_retrieve_fallback_only_semantic():
     es = MagicMock()
     es.is_available.return_value = True
     es.get_client.return_value.search.return_value = {"hits": {"hits": [], "max_score": 0.0}}
+    es.get_client.return_value.mget.return_value = {"docs": []}
 
     result = retrieve("查询", "kb-1", cfg, qdrant, es, _embedding_mock())
     assert result.level == FALLBACK
@@ -255,6 +267,36 @@ def test_retrieve_decline_no_hits():
     es.get_client.return_value.search.return_value = {"hits": {"hits": [], "max_score": 0.0}}
 
     result = retrieve("无结果查询", "kb-1", cfg, qdrant, es, _embedding_mock())
+    assert result.level == DECLINE
+    assert result.citations == []
+    assert result.semantic_hits == 0
+    assert result.keyword_hits == 0
+
+
+def test_retrieve_decline_when_both_paths_filtered_empty():
+    """A+B 方案：语义路 score_threshold 过滤 + 关键词路 minimum_should_match 过滤
+    → 双路均空 → decline 可达（无关查询场景）。"""
+    cfg = _cfg(
+        threshold=0.6,
+        weak_threshold=0.45,
+        top_k=5,
+        semantic_weight=0.6,
+        score_threshold=0.3,
+        min_should_match="75%",
+    )
+    # Qdrant mock：query_points 返回空（模拟 score_threshold 过滤掉所有低分结果）
+    qdrant = MagicMock()
+    qdrant.is_available.return_value = True
+    qdrant.collection = "kb_blocks"
+    qdrant.get_client.return_value.query_points.return_value = SimpleNamespace(points=[])
+    # ES mock：search 返回空（模拟 minimum_should_match 过滤掉泛匹配）
+    es = MagicMock()
+    es.is_available.return_value = True
+    es.index = "kb_blocks"
+    es.get_client.return_value.search.return_value = {"hits": {"hits": [], "max_score": 0.0}}
+    es.get_client.return_value.mget.return_value = {"docs": []}
+
+    result = retrieve("今天天气怎么样明天会下雨吗", "kb-1", cfg, qdrant, es, _embedding_mock())
     assert result.level == DECLINE
     assert result.citations == []
     assert result.semantic_hits == 0
@@ -286,6 +328,8 @@ def test_retrieve_es_unavailable_degrades_to_semantic():
     assert result.level == FALLBACK
     assert len(result.citations) == 1
     assert result.keyword_hits == 0
+    # ES 不可用 → 回查失败 → 回退子块文本
+    assert result.citations[0].text == "内容A"
 
 
 def test_retrieve_both_unavailable_returns_decline():
@@ -314,9 +358,66 @@ def test_retrieve_respects_top_k():
     es = MagicMock()
     es.is_available.return_value = True
     es.get_client.return_value.search.return_value = {"hits": {"hits": [], "max_score": 0.0}}
+    es.get_client.return_value.mget.return_value = {"docs": []}
 
     result = retrieve("查询", "kb-1", cfg, qdrant, es, _embedding_mock())
     assert len(result.citations) == 2
+
+
+def test_retrieve_semantic_uses_parent_text():
+    """语义路命中子块 → 回查 ES 取父块全文（引用上卷，非子块文本）。"""
+    cfg = _cfg(threshold=0.6, weak_threshold=0.45, top_k=5, semantic_weight=0.6)
+    # 搜索无关键词命中（search 空），但父块 doc 存在（mget 按 id 可取）
+    qdrant = _qdrant_mock([("p1", 0.8, "f1", "a.md", "## 线程生命周期")])
+    es = _es_mock([], mget_texts={"p1": "## 线程生命周期 Java 线程有新建、可运行、阻塞等状态"})
+
+    result = retrieve("线程生命周期", "kb-1", cfg, qdrant, es, _embedding_mock())
+
+    assert result.level == FALLBACK
+    assert len(result.citations) == 1
+    assert result.citations[0].text == "## 线程生命周期 Java 线程有新建、可运行、阻塞等状态"
+
+
+def test_retrieve_double_hit_text_is_parent():
+    """双路命中：语义路回查后文本与关键词路（父块全文）同源。"""
+    cfg = _cfg(threshold=0.6, weak_threshold=0.45, top_k=5, semantic_weight=0.6)
+    qdrant = _qdrant_mock([("p1", 0.9, "f1", "a.md", "子块-裸标题")])
+    es = _es_mock([("p1", 8.0, "f1", "a.md", "父块全文-标题+正文")])
+
+    result = retrieve("查询", "kb-1", cfg, qdrant, es, _embedding_mock())
+
+    assert result.level == NORMAL
+    assert result.citations[0].text == "父块全文-标题+正文"
+
+
+def test_retrieve_backfill_falls_back_on_mget_error():
+    """ES 可用但 mget 抛异常 → 回退子块文本，引用仍存在。"""
+    cfg = _cfg(threshold=0.6, weak_threshold=0.45, top_k=5, semantic_weight=0.6)
+    qdrant = _qdrant_mock([("p1", 0.8, "f1", "a.md", "子块内容")])
+    es = MagicMock()
+    es.is_available.return_value = True
+    es.get_client.return_value.search.return_value = {"hits": {"hits": [], "max_score": 0.0}}
+    es.get_client.return_value.mget.side_effect = RuntimeError("es mget down")
+
+    result = retrieve("查询", "kb-1", cfg, qdrant, es, _embedding_mock())
+
+    assert len(result.citations) == 1
+    assert result.citations[0].text == "子块内容"
+
+
+def test_retrieve_backfill_falls_back_on_missing_doc():
+    """mget 返回缺该 parent_id 的 doc → 回退子块文本。"""
+    cfg = _cfg(threshold=0.6, weak_threshold=0.45, top_k=5, semantic_weight=0.6)
+    qdrant = _qdrant_mock([("p1", 0.8, "f1", "a.md", "子块内容")])
+    es = MagicMock()
+    es.is_available.return_value = True
+    es.get_client.return_value.search.return_value = {"hits": {"hits": [], "max_score": 0.0}}
+    es.get_client.return_value.mget.return_value = {"docs": [{"_id": "p1", "_found": False}]}
+
+    result = retrieve("查询", "kb-1", cfg, qdrant, es, _embedding_mock())
+
+    assert len(result.citations) == 1
+    assert result.citations[0].text == "子块内容"
 
 
 def test_citation_to_fields():

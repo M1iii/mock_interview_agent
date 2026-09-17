@@ -23,8 +23,8 @@ MAX_CITATIONS = 3
 # fallback 级提示语（Tip 7 决策 4）：弱提示不干扰面试
 _FALLBACK_NOTE = "_以下内容基于有限资料生成，仅供参考_"
 
-# 检索片段截断长度（prompt 内展示）
-_SNIPPET_LEN = 120
+# 检索片段不截断：父块全文（≤800 字）直接注入 prompt，token 体积可控
+_SNIPPET_LEN = 0
 
 
 def _extract_answer(state: InterviewState) -> str:
@@ -55,7 +55,7 @@ def _build_reference_block(result: RetrievalResult) -> str:
     lines = ["【参考资料】"]
     for i, c in enumerate(result.citations[:MAX_CITATIONS], start=1):
         snippet = c.text.strip().replace("\n", " ")
-        if len(snippet) > _SNIPPET_LEN:
+        if _SNIPPET_LEN and len(snippet) > _SNIPPET_LEN:
             snippet = snippet[:_SNIPPET_LEN] + "…"
         lines.append(f"[{i}]《{c.file_name}》：{snippet}")
     if result.level == FALLBACK:

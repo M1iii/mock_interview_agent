@@ -27,7 +27,7 @@
 
 ## 3. 当前阶段
 
-**阶段：P1 验收执行完成（2026-09-17）——passed=11 failed=3，P1 未整体通过；3 项 FAIL 均为已裁决应用缺陷/观察项（详见 §4 验收行 + `docs/acceptance/p1-acceptance-report.md`），待后续修复复测；进入 P2 澄清或缺陷修复**
+**阶段：P1 验收完成 + 引用上卷修复完成（2026-09-17）——passed=11 failed=3，P1-3（28%）与 P1-4 decline 子项搁置待 P2 后排查复测；进入 P2 需求澄清**
 
 按用户 3 阶段工作流（需求澄清 → 分步执行 → 验收总结）。P0 已具备执行条件：边界、非功能、8 项产品决策、技术栈、架构草案全部落档。
 
@@ -70,7 +70,8 @@
 - [x] P1 步骤 6（检索服务）：`app/retrieval/retrieve.py`——双路召回（Qdrant 语义 + ES 关键词 ik）→ 方案 B 合并（双路命中 min-max 归一化加权和 / 单路命中 fallback）→ 四级降级（normal/weak/fallback/decline）→ 引用元数据 + 耗时打点；同步补入库端 kb_id/file_name 字段 + ES mapping 升级 + Qdrant query_points API；200 例 pytest + 真实服务冒烟通过（单查询 ~150ms，远低于 P1-6 P95≤2s）
 - [x] P1 步骤 7（出题节点改造）：仅出题注入——`ask_question_node` 接入 `RetrievalContext`（会话 kb_id 时检索，查询词已问主题延续/首题场景默认词）+ 参考资料区块注入 prompt（`{reference_block}` 占位，无命中完全退化）+ 四级降级出题（normal/weak 知识出题 / fallback 弱提示语 / decline 纯通用）+ 题干 `[n]` 角标 + SSE `citations` 事件 + 前端引用来源折叠列表 + 新建会话关联知识库（下拉可选）；211 例 pytest + ruff + 真实服务冒烟通过（`_smoke_tip7.py`）
 - [x] P1 步骤 8（答案增强）：评估节点复用出题检索结果（方案 A：检索仍仅出题节点，不新增调用）+ 取向 1（知识库优先、自身知识兜底）事实校准——评语 `[n]` 角标 + SSE `assess` 事件携带 citations + 右侧评估面板引用来源折叠；无 kb/decline 完全退化为纯 LLM 评估；217 例 pytest + ruff + 前端 build 通过
-- [x] P1 验收执行（2026-09-17）：自建 5 篇多栈 MD 语料（50 考点）+ 50 题预标出处题库 + 独立脚本 `_acceptance_p1.py` 全量串行，实测 **passed=11 failed=3**——P1-1 入库 5/5=100%、P1-2 召回 50/50=100%、P1-5 删除级联三处 0 残留、P1-6 P95=134ms、P1-7 切换重建（ok=5/绑定一致/抽样 5/5）通过；**FAIL 3 项（均按用户裁决不改 app、记 FAIL 落档）**：P1-3 引用准确率 12%（引用文本取命中子块→大量裸 Markdown 标题，应用缺陷）、P1-4 decline 子项（语义路无相似度截断→decline 在 Qdrant 在线时不可达，应用缺陷）、P1-7 观察项（查询模型≠绑定模型拒绝校验未实现，记录型 FAIL）；验收报告 `docs/acceptance/p1-acceptance-report.md`（草稿待用户确认归档）
+- [x] P1 验收执行（2026-09-17）：自建 5 篇多栈 MD 语料（50 考点）+ 50 题预标出处题库 + 独立脚本 `_acceptance_p1.py` 全量串行，实测 **passed=11 failed=3**——P1-1 入库 5/5=100%、P1-2 召回 50/50=100%、P1-5 删除级联三处 0 拋留、P1-6 P95=134ms、P1-7 切换重建（ok=5/绑定一致/抽样 5/5）通过；**FAIL 3 项**：P1-3 引用准确率 12%（引用文本取命中子块→大量裸 Markdown 标题，应用缺陷）、P1-4 decline 子项（语义路无相似度截断→decline 在 Qdrant 在线时不可达，应用缺陷）、P1-7 观察项（查询模型≠绑定模型拒绝校验未实现，记录型 FAIL）；验收报告 `docs/acceptance/p1-acceptance-report.md`
+- [x] P1-3 引用上卷修复 + P1-4 降级阈值调优（2026-09-17）：`retrieve.py` 新增 `_backfill_parent_text`（语义路命中后按 parent_id mget ES 父块全文，失败回退子块文本）；`nodes/__init__.py` `_SNIPPET_LEN` 120→0（不截断，父块全文≤800 字直接注入 prompt）；`config.py` 新增 `score_threshold=0.0`（Qdrant 不过滤）+ `min_should_match=25%`（ES 泛匹配过滤）；223 例 pytest + ruff + 前端 build 全通过。复测结果：P1-3 从 12%→28%（judged=50/50，cites=40/144）、P1-4 前 3 子项 PASS（双路 normal/语义 fallback/关键词 fallback）、decline 子项仍 FAIL（score_threshold=0 不过滤→无关查询仍返回 top-k 命中）。**P1-3 28% 与 P1-4 decline 子项按用户裁决搁置，待 P2 完成后排查文档/题库质量 + 重新设计降级策略后复测**
 
 ## 5. 已知问题 / 待确认 / 风险
 
@@ -78,6 +79,8 @@
 |---|---|---|
 | 待确认 | 降级相关性阈值（默认 0.6） | P1 启用时确认 |
 | 待确认 | P2 web_verify 触发方式 | P2 澄清时确认 |
+| 搁置·P1-3 | 引用准确率 28%（标准≥90%），judged=50/50——回查父块全文已生效但准确率仍低，需排查文档/题库质量 + 裁判口径 | P2 完成后回来排查复测 |
+| 搁置·P1-4 | decline 子项：bge cosine 分布与分级阈值不匹配，score_threshold 任何值都两难（过滤则误杀正常查询，不过滤则无关查询走 fallback）；需重新设计降级策略 | P2 完成后回来重新设计 |
 | 已知限制 | P0 断点续聊为内存态，后端重启会话丢失（前端提示） | 按边界确认接受，P2 解决 |
 | 已知限制 | P0 会话元数据存内存，重启后会话列表清空 | 同上，P2 随 SqliteSaver 落 SQLite |
 | 风险 | 全局单流式为进程内锁，多进程部署需换外部锁 | 已知扩展点，当前单进程无影响 |

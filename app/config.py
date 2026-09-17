@@ -38,6 +38,8 @@ _DEFAULTS = {
         "semantic_weight": 0.6,
         "threshold": 0.6,
         "weak_threshold": 0.45,
+        "score_threshold": 0.0,
+        "min_should_match": "25%",
         "top_k": 5,
         "kb_dir": "data/kb_files",
         "kb_db": "data/kb.db",
@@ -97,6 +99,12 @@ def load_config(config_path: Path | None = None, env_path: Path | None = None) -
                 "threshold": float(os.getenv("RETRIEVAL_THRESHOLD", str(base.retrieval.threshold))),
                 "weak_threshold": float(
                     os.getenv("RETRIEVAL_WEAK_THRESHOLD", str(base.retrieval.weak_threshold))
+                ),
+                "score_threshold": float(
+                    os.getenv("RETRIEVAL_SCORE_THRESHOLD", str(base.retrieval.score_threshold))
+                ),
+                "min_should_match": os.getenv(
+                    "RETRIEVAL_MIN_SHOULD_MATCH", base.retrieval.min_should_match
                 ),
                 "top_k": _env_int("TOP_K", base.retrieval.top_k),
                 "kb_dir": os.getenv("KB_DIR", base.retrieval.kb_dir),

@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-09-17 · P1-3 引用上卷修复 + P1-4 降级阈值调优（缺陷搁置落档）
+
+**描述**：针对 P1 验收两项 FAIL 实施修复。① **P1-3 引用上卷**：引用文本装配从「命中子块文本」改为「按 `parent_id` 回查 ES 父块全文」（新增 `_backfill_parent_text`，失败回退子块文本），并取消 prompt 侧截断，引用文本由裸 Markdown 标题变为「标题 + 正文」父块全文。② **P1-4 降级阈值**：新增 `score_threshold`（Qdrant 语义分下限）与 `min_should_match`（ES 泛匹配过滤）两项可配置参数。修复后复测：P1-3 引用准确率 **12% → 28%**（judged 恢复 50/50，cites 40/144），P1-4 前三子项（双路 normal / 语义单路 fallback / 关键词单路 fallback）全部恢复 PASS。**P1-3（28%，标准 ≥90%）与 P1-4 decline 子项（bge cosine 分布与分级阈值不匹配，任何 score_threshold 取值均两难）按用户裁决搁置**，记入 `docs/project-status.md` §5 待处理问题，待 P2 阶段完成后回来排查文档/题库质量并重新设计降级策略后复测。
+
+**变更内容**
+- `app/retrieval/retrieve.py`：新增 `_backfill_parent_text()`（语义路命中后按 parent_id `mget` ES 父块全文，异常/缺 doc 回退子块文本，不阻断检索）；语义路 `query_points` 增 `score_threshold`；关键词路 `match` 改 `{query, minimum_should_match}` 结构
+- `app/interview/nodes/__init__.py`：`_SNIPPET_LEN` 120 → 0（不截断，父块全文 ≤800 字直接注入 prompt，最坏 3 条 ≈2400 字 ≈ 上下文 3.7%）
+- `app/config.py`：`retrieval` 新增 `score_threshold`（默认 0.0 = 不过滤，保证 judged 满额）与 `min_should_match`（默认 `25%`），支持 `RETRIEVAL_SCORE_THRESHOLD` / `RETRIEVAL_MIN_SHOULD_MATCH` 环境变量覆盖
+- `tests/test_retrieval_retrieve.py`：`_es_mock` 增 mget mock；新增 5 例（父块上卷 / 双路同源 / mget 异常回退 / 缺 doc 回退 / 双路过滤空 → decline）
+- `tests/test_nodes.py`：`test_build_reference_block_truncates_snippet` 改为 `test_build_reference_block_no_truncation`
+- 文档：`docs/acceptance/p1-acceptance-report.md`（P1-3 实测 28% + 两项搁置归因）、`docs/project-status.md`（§3/§4/§5 搁置行）、`docs/prd.md`（§6 P1 验收结论）
+
+**验证结果**
+- 全量 `uv run python _acceptance_p1.py`：SUMMARY **passed=11 failed=3**；P1-3 judged=50/50 cites=40/144=28%、P1-4 双路=normal(5 cites)/语义=fallback/关键词=fallback、无关查询=fallback（decline 仍不可达，已搁置）
+- 阈值调优过程记录：0.3/75% → decline 可达但正常查询被误杀（双路/关键词路 FAIL）；0.15/50% → judged 跌至 13/50；0.0/25% → judged 恢复 50/50（当前基线）
+- 回归 pytest 223 例全通过；`ruff format`/`check` 无问题；前端 `npm run build` 通过
+
+**项目结构更新**
+- 无新增文件；修改 `app/retrieval/retrieve.py`、`app/interview/nodes/__init__.py`、`app/config.py`、`tests/test_retrieval_retrieve.py`、`tests/test_nodes.py`
+- 文档：`docs/acceptance/p1-acceptance-report.md`、`docs/project-status.md`、`docs/prd.md`、`CHANGELOG.md`
+
 ## 2026-09-17 · P1 验收执行完成（P1-1~P1-7 真实环境）
 
 **描述**：自建 5 篇多栈 MD 验收语料（redis/mysql/java-concurrency/network/os 各 10 考点）+ 50 题预标出处题库（`gold_snippet`）+ 独立验收脚本 `_acceptance_p1.py`（CLI `--only`/`--keep`，全量串行 P1-1~P1-7）在真实服务（Qdrant + ES ik + TEI bge + DeepSeek）上执行七项退出标准。实测 **passed=11 failed=3**：P1-1 入库 5/5=100%（幂等块数一致）、P1-2 gold 定位 50/50 + 召回 50/50=100%、P1-5 文件/库级删除三处 0 残留、P1-6 检索 P95=134ms、P1-7 切换重建 ok=5 + 绑定一致 + 抽样命中 5/5 均通过；**P1-3 引用准确率 12%（FAIL）** 与 **P1-4 decline 子项（FAIL）** 为应用层真实缺陷（引用文本取自命中的子块导致大量裸 Markdown 标题、语义路无相似度截断致 decline 级在 Qdrant 在线时不可达），按用户裁决**不改 app、记 FAIL 落档**待后续修复；P1-7 观察项（查询模型≠绑定模型拒绝校验未实现）记录型 FAIL 待用户裁决。

@@ -79,6 +79,8 @@ def retrieve(
     weak_threshold = float(cfg.retrieval.weak_threshold)  # default 0.45
     top_k = int(cfg.retrieval.top_k)
     semantic_weight = float(cfg.retrieval.semantic_weight)  # default 0.6
+    score_threshold = float(cfg.retrieval.score_threshold)  # default 0.3
+    min_should_match = cfg.retrieval.min_should_match  # default "75%"
 
     # ---- 语义路 ----
     semantic_hits: dict[str, dict] = {}
@@ -90,6 +92,7 @@ def retrieve(
             collection_name=qdrant.collection,
             query=vec,
             limit=top_k,
+            score_threshold=score_threshold,
             query_filter=Filter(must=[FieldCondition(key="kb_id", match=MatchValue(value=kb_id))]),
             with_payload=True,
         )
@@ -113,6 +116,10 @@ def retrieve(
     except Exception as e:  # noqa: BLE001 - 单路故障不阻断另一路
         logger.error("semantic retrieval error: {err}", err=repr(e))
 
+    # 语义路命中：按 parent_id 回查 ES 父块全文（引用上卷，失败回退子块文本）
+    if semantic_hits:
+        _backfill_parent_text(semantic_hits, es)
+
     # ---- 关键词路 ----
     keyword_hits: dict[str, dict] = {}
     try:
@@ -123,7 +130,11 @@ def retrieve(
             query={
                 "bool": {
                     "must": [
-                        {"match": {"text": query}},
+                        {
+                            "match": {
+                                "text": {"query": query, "minimum_should_match": min_should_match}
+                            }
+                        },
                         {"term": {"kb_id": kb_id}},
                     ]
                 }
@@ -187,6 +198,21 @@ def retrieve(
         k=result.keyword_ms,
     )
     return result
+
+
+def _backfill_parent_text(semantic_hits: dict[str, dict], es: ESManager) -> None:
+    """语义路命中后按 parent_id 回查 ES 父块全文；失败回退子块文本（引用始终存在）。"""
+    try:
+        client = es.get_client()
+        resp = client.mget(index=es.index, ids=list(semantic_hits), _source=["text"])
+    except Exception as e:  # noqa: BLE001 - 回查失败仅回退文本，不阻断检索
+        logger.warning("parent text backfill failed, fallback to child text: {err}", err=repr(e))
+        return
+    for doc in resp.get("docs", []):
+        pid = doc.get("_id")
+        src = doc.get("_source") or {}
+        if pid in semantic_hits and src.get("text"):
+            semantic_hits[pid]["text"] = src["text"]
 
 
 def _merge_hits(
