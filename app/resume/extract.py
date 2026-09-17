@@ -47,6 +47,14 @@ class Point:
     detail: str
     source_snippet: str
 
+    def to_dict(self) -> dict:
+        return {
+            "category": self.category,
+            "title": self.title,
+            "detail": self.detail,
+            "source_snippet": self.source_snippet,
+        }
+
 
 @dataclass
 class ExtractedProfile:

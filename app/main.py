@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router as chat_router
 from app.api.knowledge import router as knowledge_router
+from app.api.resume import router as resume_router
 from app.api.sessions import router as sessions_router
 from app.api.settings import router as settings_router
 from app.config import PROJECT_ROOT, load_config
@@ -22,6 +23,7 @@ from app.retrieval.qdrant import QdrantManager
 from app.retrieval.retrieve import RetrievalContext
 from app.store.checkpointer import create_checkpointer
 from app.store.knowledge import KnowledgeStore
+from app.store.resume import ResumeStore
 from app.store.sessions import SqliteSessionStore
 
 WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
@@ -40,6 +42,7 @@ async def lifespan(app: FastAPI):
         app.state.key_store.set_global_key(cfg.llm.api_key)
     app.state.session_store = SqliteSessionStore(PROJECT_ROOT / cfg.interview.db)
     app.state.knowledge_store = KnowledgeStore(PROJECT_ROOT / cfg.retrieval.kb_db)
+    app.state.resume_store = ResumeStore(PROJECT_ROOT / cfg.resume.db)
     app.state.checkpointer = create_checkpointer(cfg)
     # P1 检索服务：懒加载 manager，启动不探测不阻塞；缺失时知识库功能降级
     app.state.qdrant = QdrantManager(cfg)
@@ -61,6 +64,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(sessions_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(knowledge_router, prefix="/api")
+app.include_router(resume_router, prefix="/api")
 
 
 @app.get("/health")

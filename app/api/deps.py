@@ -10,6 +10,7 @@ from app.retrieval.embedding import EmbeddingProvider
 from app.retrieval.es import ESManager
 from app.retrieval.qdrant import QdrantManager
 from app.store.knowledge import KnowledgeStore
+from app.store.resume import ResumeStore
 from app.store.sessions import SessionMeta, SqliteSessionStore
 
 
@@ -27,6 +28,10 @@ def get_session_store(request: Request) -> SqliteSessionStore:
 
 def get_knowledge_store(request: Request) -> KnowledgeStore:
     return request.app.state.knowledge_store
+
+
+def get_resume_store(request: Request) -> ResumeStore:
+    return request.app.state.resume_store
 
 
 def get_qdrant(request: Request) -> QdrantManager:

@@ -62,12 +62,15 @@ def _parse_docx(p: Path) -> str:
 def _parse_pdf(p: Path) -> str:
     import pdfplumber  # 惰性导入：仅 .pdf 解析时加载
 
-    parts: list[str] = []
-    with pdfplumber.open(str(p)) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            if text.strip():
-                parts.append(text)
+    try:
+        with pdfplumber.open(str(p)) as pdf:
+            parts: list[str] = []
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                if text.strip():
+                    parts.append(text)
+    except Exception as e:  # noqa: BLE001 - pdfminer 原始异常（损坏/无文字层 PDF）归一为 ParseError
+        raise ParseError(f"PDF 无文字层或文件损坏（解析失败）：{e}") from e
     joined = "\n\n".join(parts)
     if not joined.strip():
         raise ParseError(f"PDF 无文字层（扫描件需先 OCR 或提供文字版）：{p.name}")
