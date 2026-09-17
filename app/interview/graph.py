@@ -56,17 +56,24 @@ def route_after_evaluate(state: InterviewState) -> str:
 # --- 图构建 ---
 
 
-def build_graph(llm: DeepSeekClient, retrieval=None) -> StateGraph:
+def build_graph(llm: DeepSeekClient, retrieval=None, resume_store=None, cfg=None) -> StateGraph:
     """构建面试编排图（未编译，供调用方 compile）。
 
     暂停点（→ END）：ask_question / follow_up 生成内容后暂停，等用户回答后
     由调用方重新 invoke 触发 evaluate。
     非暂停节点（opening / evaluate / report）执行后立即路由到下一节点。
     retrieval: RetrievalContext——注入出题节点做知识库检索（可 None）。
+    resume_store: ResumeStore——双来源出题的简历考点来源（可 None）。
+    cfg: 应用配置——面试类型配比来源（可 None，缺省回落 P1 行为）。
     """
     graph = StateGraph(InterviewState)
     graph.add_node("opening", partial(opening_node, llm=llm))
-    graph.add_node("ask_question", partial(ask_question_node, llm=llm, retrieval=retrieval))
+    graph.add_node(
+        "ask_question",
+        partial(
+            ask_question_node, llm=llm, retrieval=retrieval, resume_store=resume_store, cfg=cfg
+        ),
+    )
     graph.add_node("evaluate", partial(evaluate_node, llm=llm))
     graph.add_node("follow_up", partial(follow_up_node, llm=llm))
     graph.add_node("report", partial(report_node, llm=llm))
@@ -97,10 +104,14 @@ def build_graph(llm: DeepSeekClient, retrieval=None) -> StateGraph:
     return graph
 
 
-def compile_graph(llm: DeepSeekClient, checkpointer=None, retrieval=None):
+def compile_graph(
+    llm: DeepSeekClient, checkpointer=None, retrieval=None, resume_store=None, cfg=None
+):
     """编译面试编排图，返回可执行图。
 
     checkpointer: P0 MemorySaver / P2 SqliteSaver，不传则无持久化。
     retrieval: RetrievalContext，出题节点知识库检索注入（可 None）。
+    resume_store: ResumeStore，双来源出题注入（可 None）。
+    cfg: 应用配置，面试类型配比注入（可 None）。
     """
-    return build_graph(llm, retrieval).compile(checkpointer=checkpointer)
+    return build_graph(llm, retrieval, resume_store, cfg).compile(checkpointer=checkpointer)

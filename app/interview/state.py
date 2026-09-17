@@ -37,6 +37,8 @@ class InterviewState(TypedDict, total=False):
     asked_ids: list[str]  # P2 已问 ID
     answered_qa: list  # P2 对错记录
     kb_id: str | None  # P1 关联知识库 ID（会话级，出题检索范围）
+    resume_id: str | None  # P2 关联简历 ID（会话级，双来源出题）
+    interview_type: str  # P2 面试类型：technical / behavioral / comprehensive
     # --- 运行时注入（不持久化，每次 invoke 时注入）---
     _api_key: str  # 会话级 API Key 快照
     _topic: str  # 当前题主题标签
@@ -53,6 +55,8 @@ def initial_state(
     question_count: int = 10,
     skip_opening: bool = False,
     kb_id: str | None = None,
+    resume_id: str | None = None,
+    interview_type: str = "technical",
 ) -> InterviewState:
     """创建会话初始状态。"""
     return InterviewState(
@@ -71,4 +75,6 @@ def initial_state(
         asked_ids=[],
         answered_qa=[],
         kb_id=kb_id,
+        resume_id=resume_id,
+        interview_type=interview_type,
     )

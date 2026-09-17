@@ -13,6 +13,8 @@ from app.interview.prompts.evaluate import EVALUATE
 from app.interview.prompts.follow_up import FOLLOW_UP
 from app.interview.prompts.opening import OPENING_TEXT
 from app.interview.prompts.report import REPORT
+from app.interview.prompts.resume_question import RESUME_QUESTION
+from app.interview.ratio import is_resume_question
 from app.interview.state import InterviewState, Score
 from app.llm.client import DeepSeekClient
 from app.retrieval.retrieve import DECLINE, FALLBACK, RetrievalResult, retrieve
@@ -67,6 +69,23 @@ def _build_reference_block(result: RetrievalResult) -> str:
     return "\n".join(lines)
 
 
+def _build_points_block(points: list[dict]) -> str:
+    """构造简历考点区块：带 [n] 序号 + 原文片段（出题依据）。"""
+    lines = ["【简历考点清单】"]
+    for i, p in enumerate(points, start=1):
+        snippet = p["source_snippet"].strip().replace("\n", " ")
+        lines.append(f"[{i}]（{p['category']}）{p['title']}：{p['detail']}（原文：{snippet}）")
+    return "\n".join(lines)
+
+
+def _interview_type_label(interview_type: str) -> str:
+    return {
+        "technical": "技术面",
+        "behavioral": "行为面",
+        "comprehensive": "综合面",
+    }.get(interview_type, "技术面")
+
+
 def _citation_dict(c) -> dict:
     """Citation → 前端可序列化 dict（省略 parent_id 内部细节）。"""
     return {
@@ -98,41 +117,75 @@ def ask_question_node(
     llm: DeepSeekClient,
     callbacks: list | None = None,
     retrieval=None,
+    resume_store=None,
+    cfg=None,
 ) -> dict:
-    """出题：按场景选 prompt，LLM 生成 JSON {question, topic}。
+    """出题：双来源（简历考点 / 知识库检索）按面试类型配比混合（P2 决策 1/7）。
 
+    落位：题号命中简历题集合 → 简历出题；否则知识库检索出题（P1 逻辑）。
+    降级链：简历不可用 → 知识库；知识库不可用 → 纯通用（P0）；两者皆无 → 纯通用。
     callbacks: 透传给 LLM 用于逐 token 流式（skip 出题不走图时的转发）。
-    retrieval: RetrievalContext 或 None——会话关联知识库时检索注入参考资料
-    （Tip 7：normal/weak/fallback 注入，decline 与未关联知识库时纯通用出题）。
+    retrieval: RetrievalContext 或 None。resume_store: ResumeStore 或 None。cfg: 应用配置。
     """
     scene = state.get("scene", "fulltime")
     template = ASK_QUESTION.get(scene, ASK_QUESTION["fulltime"])
 
+    qi = state.get("question_index", 0) + 1  # 1-based
+    qcount = state.get("question_count", 10)
+    interview_type = state.get("interview_type", "technical")
+    ratio = 0.3
+    if cfg is not None:
+        ratio = float(getattr(cfg.resume.ratio, interview_type, 0.3))
+    resume_id = state.get("resume_id")
+
+    points: list[dict] = []
+    resume_usable = resume_store is not None and resume_id is not None
+    if resume_usable:
+        # ★ 归一化：真实 ResumeStore 返回 ResumePoint dataclass（不可下标），统一转 dict
+        raw_points = resume_store.list_points(resume_id)
+        points = [p if isinstance(p, dict) else p.to_dict() for p in raw_points]
+        resume_usable = bool(points)
+
+    use_resume = resume_usable and is_resume_question(qi - 1, qcount, ratio)
+    kb_id = state.get("kb_id")
+
     reference_block = ""
     citations: list[dict] = []
     level: str | None = None
-    kb_id = state.get("kb_id")
-    if kb_id and retrieval is not None:
-        result = retrieve(
-            query=_build_search_query(state),
-            kb_id=kb_id,
-            cfg=retrieval.cfg,
-            qdrant=retrieval.qdrant,
-            es=retrieval.es,
-            embedding=retrieval.embedding,
-        )
-        if result.level != DECLINE and result.citations:
-            reference_block = _build_reference_block(result)
-            citations = [_citation_dict(c) for c in result.citations[:MAX_CITATIONS]]
-            level = result.level
 
-    prompt = template.format(
-        question_index=state.get("question_index", 0) + 1,
-        question_count=state.get("question_count", 10),
-        difficulty_stage=state.get("difficulty_stage", 1),
-        asked_topics=_get_topic_list(state),
-        reference_block=reference_block,
-    )
+    if use_resume:
+        # 简历出题：考点块写入 reference_block（评估节点复用做事实校准）
+        reference_block = _build_points_block(points)
+        prompt = RESUME_QUESTION.format(
+            question_index=qi,
+            question_count=qcount,
+            interview_type=_interview_type_label(interview_type),
+            asked_topics=_get_topic_list(state),
+            points_block=reference_block,
+            difficulty_stage=state.get("difficulty_stage", 1),
+        )
+    else:
+        if kb_id and retrieval is not None:
+            result = retrieve(
+                query=_build_search_query(state),
+                kb_id=kb_id,
+                cfg=retrieval.cfg,
+                qdrant=retrieval.qdrant,
+                es=retrieval.es,
+                embedding=retrieval.embedding,
+            )
+            if result.level != DECLINE and result.citations:
+                reference_block = _build_reference_block(result)
+                citations = [_citation_dict(c) for c in result.citations[:MAX_CITATIONS]]
+                level = result.level
+        prompt = template.format(
+            question_index=qi,
+            question_count=qcount,
+            difficulty_stage=state.get("difficulty_stage", 1),
+            asked_topics=_get_topic_list(state),
+            reference_block=reference_block,
+        )
+
     raw, _ = llm.complete_sync(api_key=state["_api_key"], prompt=prompt, callbacks=callbacks)
     question, topic = _parse_question(raw)
     if level == FALLBACK:

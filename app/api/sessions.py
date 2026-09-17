@@ -22,6 +22,10 @@ class CreateSessionRequest(BaseModel):
     question_count: int = Field(default=10, ge=5, le=30)
     skip_opening: bool = False
     kb_id: str | None = None
+    resume_id: str | None = None
+    interview_type: str = Field(
+        default="technical", pattern="^(technical|behavioral|comprehensive)$"
+    )
 
 
 class SessionResponse(BaseModel):
@@ -34,6 +38,8 @@ class SessionResponse(BaseModel):
     message_count: int = 0
     question_index: int = 0
     kb_id: str | None = None
+    resume_id: str | None = None
+    interview_type: str = "technical"
 
 
 class ReportResponse(BaseModel):
@@ -63,6 +69,8 @@ def _to_response(meta: SessionMeta) -> SessionResponse:
         question_count=meta["question_count"],
         created_at=meta["created_at"].isoformat(),
         kb_id=meta.get("kb_id"),
+        resume_id=meta.get("resume_id"),
+        interview_type=meta.get("interview_type", "technical"),
     )
 
 
@@ -81,7 +89,15 @@ async def create_session(
             status_code=400, detail="全局 API Key 未设置，请先在配置页设置"
         ) from None
 
-    meta = store.create(session_id, req.scene, req.question_count, req.skip_opening, req.kb_id)
+    meta = store.create(
+        session_id,
+        req.scene,
+        req.question_count,
+        req.skip_opening,
+        req.kb_id,
+        req.resume_id,
+        req.interview_type,
+    )
     return _to_response(meta)
 
 

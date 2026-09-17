@@ -288,6 +288,8 @@ async def chat(
                         question_count=session["question_count"],
                         skip_opening=session.get("skip_opening", False),
                         kb_id=session.get("kb_id"),
+                        resume_id=session.get("resume_id"),
+                        interview_type=session.get("interview_type", "technical"),
                     )
                     init["_api_key"] = api_key
                     handler = TokenStreamHandler(loop, queue)
@@ -366,6 +368,8 @@ async def chat(
                             llm,
                             handler,
                             request.app.state.retrieval,
+                            request.app.state.resume_store,
+                            request.app.state.config,
                         )
                     )
                     async for frame in _stream_task(task, queue):

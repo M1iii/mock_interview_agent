@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -471,3 +472,82 @@ def test_evaluate_citations_passthrough_identity():
     )
     result = evaluate_node(state, llm)
     assert result["scores"][0]["citations"] is cites  # 同一引用（不重新检索）
+
+
+# --- ask_question + 双来源出题（P2-2）---
+
+
+def _fake_llm(raw='{"question": "请介绍你的项目", "topic": "项目经历"}'):
+    return SimpleNamespace(complete_sync=lambda api_key, prompt, callbacks=None: (raw, {}))
+
+
+def _resume_store(points=3):
+    store = SimpleNamespace()
+    store.list_points = lambda resume_id: [
+        {
+            "id": f"rp-{i}",
+            "resume_id": "r-1",
+            "seq": i,
+            "category": "项目",
+            "title": f"考点{i}",
+            "detail": f"详情{i}",
+            "source_snippet": f"原文{i}",
+        }
+        for i in range(points)
+    ]
+    return store
+
+
+def _cfg(ratio=0.3):
+    from omegaconf import OmegaConf
+
+    return OmegaConf.create({"resume": {"ratio": {"technical": ratio}}})
+
+
+def test_ask_resume_question_when_resume_round(tmp_path):
+    """技术面第 1 题（简历题号 1）：优先走简历考点出题，注入考点块。"""
+    state = initial_state(scene="fulltime", question_count=10, kb_id="kb-1")
+    state.update(
+        {
+            "question_index": 0,
+            "interview_type": "technical",
+            "resume_id": "r-1",
+            "_api_key": "sk-test123",
+        }
+    )
+    llm = _fake_llm()
+    updates = ask_question_node(
+        state, llm, retrieval=None, resume_store=_resume_store(), cfg=_cfg(0.3)
+    )
+    # 简历出题：无 citations，但 reference_block 含考点信息
+    assert updates["_citations"] == []
+    assert "考点0" in updates["_reference_block"] or "简历" in updates["_reference_block"]
+
+
+def test_ask_kb_question_when_not_resume_round():
+    """技术面第 2 题（知识库题号）：无简历注入，P1 行为不变（retrieval=None → 纯通用出题）。"""
+    state = initial_state(scene="fulltime", question_count=10, kb_id="kb-1")
+    state.update(
+        {
+            "question_index": 1,
+            "interview_type": "technical",
+            "resume_id": "r-1",
+            "_api_key": "sk-test123",
+        }
+    )
+    updates = ask_question_node(
+        state, _fake_llm(), retrieval=None, resume_store=_resume_store(), cfg=_cfg(0.3)
+    )
+    assert updates["_reference_block"] == ""
+    assert updates["_citations"] == []
+
+
+def test_ask_resume_degrades_to_generic_without_resume():
+    """简历题号但简历不可用（无 resume_id）→ 降级纯通用出题，不报错。"""
+    state = initial_state(scene="fulltime", question_count=10)
+    state.update({"question_index": 0, "interview_type": "technical", "_api_key": "sk-test123"})
+    updates = ask_question_node(
+        state, _fake_llm(), retrieval=None, resume_store=_resume_store(), cfg=_cfg(0.3)
+    )
+    assert updates["current_question"].startswith("请介绍你的项目")
+    assert updates["_reference_block"] == ""

@@ -53,7 +53,11 @@ async def lifespan(app: FastAPI):
     )
     app.state.retrieval = retrieval_ctx
     app.state.compiled_graph = compile_graph(
-        app.state.llm_client, app.state.checkpointer, retrieval=retrieval_ctx
+        app.state.llm_client,
+        app.state.checkpointer,
+        retrieval=retrieval_ctx,
+        resume_store=app.state.resume_store,
+        cfg=cfg,
     )
 
     yield
