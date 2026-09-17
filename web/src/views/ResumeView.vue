@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { deleteResume, listResumes, retryResume, uploadResume } from '../api/client'
 import type { Resume, ResumeStatus } from '../api/types'
@@ -33,13 +33,15 @@ async function load() {
   }
 }
 
-function poll() {
-  if (resumes.value.some((r) => r.status === 'processing')) {
-    setTimeout(async () => {
-      await load()
-      poll()
-    }, 1500)
-  }
+let pollTimer: number | undefined
+
+function startPolling() {
+  window.clearInterval(pollTimer)
+  pollTimer = window.setInterval(load, 3000)
+}
+
+function stopPolling() {
+  window.clearInterval(pollTimer)
 }
 
 function pickFile() {
@@ -59,7 +61,7 @@ async function onUpload() {
     await uploadResume(file)
     if (fileInput.value) fileInput.value.value = ''
     await load()
-    poll()
+    startPolling()
   } catch (e) {
     error.value = e instanceof Error ? e.message : '上传失败'
   } finally {
@@ -71,7 +73,7 @@ async function onRetry(id: string) {
   try {
     await retryResume(id)
     await load()
-    poll()
+    startPolling()
   } catch (e) {
     error.value = e instanceof Error ? e.message : '重试失败'
   }
@@ -98,8 +100,10 @@ function goHome() {
 
 onMounted(async () => {
   await load()
-  poll()
+  startPolling()
 })
+
+onUnmounted(stopPolling)
 </script>
 
 <template>
