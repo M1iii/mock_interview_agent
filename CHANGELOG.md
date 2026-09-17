@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-09-17 · P1 验收执行完成（P1-1~P1-7 真实环境）
+
+**描述**：自建 5 篇多栈 MD 验收语料（redis/mysql/java-concurrency/network/os 各 10 考点）+ 50 题预标出处题库（`gold_snippet`）+ 独立验收脚本 `_acceptance_p1.py`（CLI `--only`/`--keep`，全量串行 P1-1~P1-7）在真实服务（Qdrant + ES ik + TEI bge + DeepSeek）上执行七项退出标准。实测 **passed=11 failed=3**：P1-1 入库 5/5=100%（幂等块数一致）、P1-2 gold 定位 50/50 + 召回 50/50=100%、P1-5 文件/库级删除三处 0 残留、P1-6 检索 P95=134ms、P1-7 切换重建 ok=5 + 绑定一致 + 抽样命中 5/5 均通过；**P1-3 引用准确率 12%（FAIL）** 与 **P1-4 decline 子项（FAIL）** 为应用层真实缺陷（引用文本取自命中的子块导致大量裸 Markdown 标题、语义路无相似度截断致 decline 级在 Qdrant 在线时不可达），按用户裁决**不改 app、记 FAIL 落档**待后续修复；P1-7 观察项（查询模型≠绑定模型拒绝校验未实现）记录型 FAIL 待用户裁决。
+
+**变更内容**
+- 新增 `tests/acceptance/corpus/redis.md` 等 5 篇语料（每篇 10 考点，二级标题 + 段落结构，父子切块入库）
+- 新增 `tests/acceptance/questions.json`（50 题：id/topic/query/source_file/gold_snippet，预标标准出处）
+- 新增 `_acceptance_p1.py`（独立验收脚本：Report 收集器 + CLI + 七项验收 + cleanup，`tests/acceptance/` 不参与 pytest 收集）
+- 新增 `docs/acceptance/p1-acceptance-report.md`（验收报告草稿，含环境探测、七项数据表、FAIL 归因、观察项）
+- 文档落档：`docs/prd.md`（§6 P1 验收结论标注）、`docs/project-status.md`（§3/§4/§6.6/§8）
+
+**验证结果**
+- 全量运行 `uv run python _acceptance_p1.py`：SUMMARY passed=11 failed=3（退出码 1，FAIL 均为已裁决应用缺陷/观察项，如实呈现未调阈值）
+- P1-2 召回命中率 50/50=100%、P1-6 P95=134ms（P50=111ms max=143ms）、P1-7 rebuild ok=5 failed=0 + binding_ok + sample_hit=5/5
+- 回归 pytest 全量通过（见下）
+
+**项目结构更新**
+- 新增：`tests/acceptance/corpus/`、`tests/acceptance/questions.json`、`_acceptance_p1.py`、`docs/acceptance/`
+- 文档：`docs/prd.md`、`docs/project-status.md`、`CHANGELOG.md`
+
 ## 2026-09-17 · PRD/架构文档漂移修正（P1 表述同步）
 
 **描述**：修正 P1 文档中两处与已确认决策不一致的旧表述：① 阶段表「Docling → 父子切块」对齐 §7「Docling 后置、轻量解析」决策，改为「轻量解析 MD/TXT/DOCX/PDF → 父子切块」；② 「评估维持四维通用标准，不额外检索」对齐 Tip 8 演进，改为「评估复用出题检索结果做事实校准（方案 A：不新增检索调用；无引用时完全退化纯 LLM 评估）」。

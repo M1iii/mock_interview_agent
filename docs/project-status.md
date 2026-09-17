@@ -27,7 +27,7 @@
 
 ## 3. 当前阶段
 
-**阶段：P1 需求澄清完成（8 项确认落档 PRD §7 + 架构 v0.3），进入 P1 分步执行（Tips 拆分见 §6.6，执行前逐项授权）**
+**阶段：P1 验收执行完成（2026-09-17）——passed=11 failed=3，P1 未整体通过；3 项 FAIL 均为已裁决应用缺陷/观察项（详见 §4 验收行 + `docs/acceptance/p1-acceptance-report.md`），待后续修复复测；进入 P2 澄清或缺陷修复**
 
 按用户 3 阶段工作流（需求澄清 → 分步执行 → 验收总结）。P0 已具备执行条件：边界、非功能、8 项产品决策、技术栈、架构草案全部落档。
 
@@ -70,6 +70,7 @@
 - [x] P1 步骤 6（检索服务）：`app/retrieval/retrieve.py`——双路召回（Qdrant 语义 + ES 关键词 ik）→ 方案 B 合并（双路命中 min-max 归一化加权和 / 单路命中 fallback）→ 四级降级（normal/weak/fallback/decline）→ 引用元数据 + 耗时打点；同步补入库端 kb_id/file_name 字段 + ES mapping 升级 + Qdrant query_points API；200 例 pytest + 真实服务冒烟通过（单查询 ~150ms，远低于 P1-6 P95≤2s）
 - [x] P1 步骤 7（出题节点改造）：仅出题注入——`ask_question_node` 接入 `RetrievalContext`（会话 kb_id 时检索，查询词已问主题延续/首题场景默认词）+ 参考资料区块注入 prompt（`{reference_block}` 占位，无命中完全退化）+ 四级降级出题（normal/weak 知识出题 / fallback 弱提示语 / decline 纯通用）+ 题干 `[n]` 角标 + SSE `citations` 事件 + 前端引用来源折叠列表 + 新建会话关联知识库（下拉可选）；211 例 pytest + ruff + 真实服务冒烟通过（`_smoke_tip7.py`）
 - [x] P1 步骤 8（答案增强）：评估节点复用出题检索结果（方案 A：检索仍仅出题节点，不新增调用）+ 取向 1（知识库优先、自身知识兜底）事实校准——评语 `[n]` 角标 + SSE `assess` 事件携带 citations + 右侧评估面板引用来源折叠；无 kb/decline 完全退化为纯 LLM 评估；217 例 pytest + ruff + 前端 build 通过
+- [x] P1 验收执行（2026-09-17）：自建 5 篇多栈 MD 语料（50 考点）+ 50 题预标出处题库 + 独立脚本 `_acceptance_p1.py` 全量串行，实测 **passed=11 failed=3**——P1-1 入库 5/5=100%、P1-2 召回 50/50=100%、P1-5 删除级联三处 0 残留、P1-6 P95=134ms、P1-7 切换重建（ok=5/绑定一致/抽样 5/5）通过；**FAIL 3 项（均按用户裁决不改 app、记 FAIL 落档）**：P1-3 引用准确率 12%（引用文本取命中子块→大量裸 Markdown 标题，应用缺陷）、P1-4 decline 子项（语义路无相似度截断→decline 在 Qdrant 在线时不可达，应用缺陷）、P1-7 观察项（查询模型≠绑定模型拒绝校验未实现，记录型 FAIL）；验收报告 `docs/acceptance/p1-acceptance-report.md`（草稿待用户确认归档）
 
 ## 5. 已知问题 / 待确认 / 风险
 
@@ -141,7 +142,7 @@
 7. ~~**出题节点改造**~~ ✅ 已完成（2026-09-17）：仅出题注入——会话关联知识库时检索 → 参考资料区块注入 prompt + 题干 `[n]` 角标 + 来源折叠列表；四级降级出题（normal/weak 知识出题 / fallback 注入+弱提示语 / decline 纯通用）；新建会话关联知识库下拉；211 例 pytest + 真实冒烟通过（`_smoke_tip7.py`）
 8. ~~**会话关联知识库**~~ ✅ 已完成（并入步骤 7，2026-09-17）：`InterviewState` + `SessionMeta` 增加 `kb_id`（可空）+ 新建弹窗下拉单选可不关联
 9. ~~**答案增强（评估复发出题检索）**~~ ✅ 已完成（2026-09-17）：`evaluate_node` 复用出题检索结果（方案 A：不新增检索调用，检索仍仅出题节点）→ 取向 1（知识库优先、自身知识兜底）事实校准 + 评语 `[n]` 角标 + `assess` 事件携带 citations + 评估面板引用来源折叠；无 kb/decline 纯 LLM 评估；217 例 pytest + ruff + 前端 build 通过
-10. **P1 验收**：P1-1 入库成功率 ≥95% / P1-2 50 题 Top-K=5 召回命中率 ≥80% / P1-3 normal 级引用准确率 ≥90% / P1-4 四级降级路径 / P1-5 删除级联 0 命中 / P1-6 单次检索 P95 ≤2s / P1-7 Embedding 切换重建且查询模型与库绑定一致
+10. **~~P1 验收~~** ✅ 已完成（2026-09-17，passed=11 failed=3，P1 未整体通过）：P1-1 入库成功率 5/5=100%（幂等块数一致）/ P1-2 50 题 Top-K=5 召回命中率 50/50=100%（gold 定位 50/50）/ P1-3 normal 级引用准确率 **12% FAIL**（应用缺陷：引用文本取命中子块→大量裸 Markdown 标题，不改 app 记 FAIL 落档）/ P1-4 四级降级 3/4 PASS（**decline 子项 FAIL**：语义路无相似度截断致不可达，不改 app 记 FAIL 落档）/ P1-5 删除级联 0 命中 PASS（文件级+库级三处 0 残留）/ P1-6 单次检索 P95=134ms PASS（≤2s）/ P1-7 Embedding 切换重建 PASS（rebuild ok=5、绑定一致、抽样 5/5）+ 观察项 FAIL（查询模型≠绑定模型拒绝校验未实现，待用户裁决）；验收脚本 `_acceptance_p1.py` + 语料/题库 `tests/acceptance/` + 报告 `docs/acceptance/p1-acceptance-report.md`（草稿）
 
 ## 7. 文档体系与维护约定
 
@@ -174,3 +175,4 @@
 - 2026-09-17 P1 步骤 6 完成：检索服务（双路召回 + 方案 B 合并 + 四级降级 + 引用元数据 + 耗时打点）；补入库端 kb_id/file_name + Qdrant query_points API；200 例 pytest + 真实服务冒烟（~150ms/查询）→ CHANGELOG + §4/§6.6
 - 2026-09-17 P1 步骤 7 完成：出题节点改造（仅出题注入：RetrievalContext 注入 + 参考资料区块 + [n] 角标 + 四级降级出题 fallback 弱提示 / decline 纯通用 + SSE citations 事件 + 前端来源折叠 + 会话关联知识库）；211 例 pytest + 真实服务冒烟（`_smoke_tip7.py`）→ CHANGELOG + §4/§6.6
 - 2026-09-17 P1 步骤 8 完成：答案增强——评估节点复用出题检索结果（方案 A：检索仍仅出题节点、不新增调用；取向 1：知识库优先、自身知识兜底）→ 评语 [n] 角标 + assess 事件携带 citations + 评估面板来源折叠；无 kb/decline 纯 LLM 评估；217 例 pytest + ruff + 前端 build → CHANGELOG + §4/§6.6
+- 2026-09-17 P1 验收执行（passed=11 failed=3，未整体通过）：P1-3 引用准确率 12% 与 P1-4 decline 不可达判定为应用层真实缺陷，用户裁决「不改 app、记 FAIL 落档待后续修复」；P1-7 查询拒绝校验缺口记录为观察项待用户裁决 → `docs/acceptance/p1-acceptance-report.md` + CHANGELOG + §3/§4/§6.6
