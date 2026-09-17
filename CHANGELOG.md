@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-09-18 · P2 充值后验收复跑确认（门禁 15/15，证据恢复）
+
+**描述**：上一轮 P2 收尾清理时全量验收被 DeepSeek 账户余额不足（HTTP 402）外部阻塞；用户充值后本轮全量复跑 `_acceptance_p2.py`，**LLM 依赖门禁全部恢复 PASS，15/15 证据完整恢复**。本轮**无任何 `app/` 代码改动**，仅文档同步（§3 / §5 / limitation F1 / CHANGELOG）。
+- **门禁 15/15**：P2-1 解析成功率 20/20=100%（20 份全 OK）+ 字段命中率 20/20=100% + 考点清单落表一致；P2-2 考点清单 ≥10（ready=20）+ 配比纯函数 + 注入链路一致性 **40/45=89%**（题干命中 3/3）；P2-3 会话记录恢复 + 对话历史恢复；P2-4 事实核验 `status=verified`（claims 3 / sources 6）+ **Key 通路**（search_calls=3 全为占位 Key）+ 未配置 Key 对照 `verification=null`；P2-5 第 1 题核验 `verified` + skip 无 error + 端到端（报告 `total_score=20` 四维齐、导出 200）
+- **观察项 1 PASS**（retry 路径：本次无 failed 简历→构造探针，原文件保留=True、22.3s）；**dep=0**
+
+**验证结果**：`uv run python _acceptance_p2.py`（全量）→ **门禁 passed=15 failed=0（退出码 0）｜观察项 total=1 failed=0｜dep=0**；pytest 280 / ruff / build 证据本轮无代码改动故维持上一轮结果。
+
+**项目结构更新**
+- 修改（文档）：`docs/project-status.md`（§3 充值后复跑确认、§5 历史区新增条目、limitation F1 补 89% 实测）、`CHANGELOG.md`（本轮无 `app/` 代码改动）
+
 ## 2026-09-18 · P2 收尾清理：文档日期修正 + 本地语料隔离 + 推送
 
 **描述**：P2 全分支最终审查修复轮（`92430e8`）落地后的收尾轮。全量复跑验证（pytest 280 / ruff / 前端 build 全绿）；P2 端到端验收复跑因 **DeepSeek 账户余额不足（HTTP 402）**被外部阻塞——非 LLM 依赖门禁（P2-3 会话/对话历史恢复 ×2、P2-2 配比纯函数、P2-4 Key 通路）与观察项（retry 路径）全 PASS，LLM 依赖门禁（P2-1 抽取 0/20、P2-4 判定 verification=null）被 402 击穿、P2-2/P2-5 正确归 dep 跳过，**无代码改动**；待充值后复跑恢复 15/15 证据。本轮仅仓库级修改（用户逐项确认）：
