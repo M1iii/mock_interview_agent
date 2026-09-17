@@ -1,0 +1,49 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1251 >>
+stream
+BT /F1 12 Tf 72 720 Td (Resume) Tj ET
+BT /F1 12 Tf 72 696 Td (Name: Chen Ming) Tj ET
+BT /F1 12 Tf 72 672 Td (Title: Frontend Developer) Tj ET
+BT /F1 12 Tf 72 648 Td (Years: 4 years) Tj ET
+BT /F1 12 Tf 72 624 Td (Email: chenming@example.com) Tj ET
+BT /F1 12 Tf 72 600 Td (Phone: 13800000016) Tj ET
+BT /F1 12 Tf 72 576 Td (Education: N/A) Tj ET
+BT /F1 12 Tf 72 552 Td (Skills: TypeScript, Vue 3, Vite, Pinia, ECharts, Node.js) Tj ET
+BT /F1 12 Tf 72 528 Td (Project: Admin Dashboard - Frontend Developer) Tj ET
+BT /F1 12 Tf 72 504 Td (Built an admin dashboard with Vue 3 and TypeScript, reusable chart components with ECharts.) Tj ET
+BT /F1 12 Tf 72 480 Td (Tech: Vue 3, TypeScript, ECharts) Tj ET
+BT /F1 12 Tf 72 456 Td (Highlights: Virtual scroll for large tables; Module federation for micro frontend) Tj ET
+BT /F1 12 Tf 72 432 Td (Project: SSR Marketing Site - Core Developer) Tj ET
+BT /F1 12 Tf 72 408 Td (Developed a server side rendered marketing site with Node.js and Vite for SEO.) Tj ET
+BT /F1 12 Tf 72 384 Td (Tech: Node.js, Vite, Vue 3) Tj ET
+BT /F1 12 Tf 72 360 Td (Highlights: SSR performance tuning and caching) Tj ET
+BT /F1 12 Tf 72 336 Td (Work Experience:) Tj ET
+BT /F1 12 Tf 72 312 Td (- 2020-now Frontend Developer at a startup) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001544 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1614
+%%EOF

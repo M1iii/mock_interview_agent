@@ -1,0 +1,49 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1431 >>
+stream
+BT /F1 12 Tf 72 720 Td (Resume) Tj ET
+BT /F1 12 Tf 72 696 Td (Name: Wang Lei) Tj ET
+BT /F1 12 Tf 72 672 Td (Title: Senior Backend Engineer) Tj ET
+BT /F1 12 Tf 72 648 Td (Years: 6 years) Tj ET
+BT /F1 12 Tf 72 624 Td (Email: wanglei@example.com) Tj ET
+BT /F1 12 Tf 72 600 Td (Phone: 13800000003) Tj ET
+BT /F1 12 Tf 72 576 Td (Education: N/A) Tj ET
+BT /F1 12 Tf 72 552 Td (Skills: Python, Redis, MySQL, Docker, Kubernetes, Kafka, FastAPI) Tj ET
+BT /F1 12 Tf 72 528 Td (Project: High Concurrency Order API - Backend Lead) Tj ET
+BT /F1 12 Tf 72 504 Td (Designed and built a high concurrency order API with FastAPI, Redis cache and MySQL sharding, peak 8000 TPS.) Tj ET
+BT /F1 12 Tf 72 480 Td (Tech: FastAPI, Redis, MySQL sharding, Kafka) Tj ET
+BT /F1 12 Tf 72 456 Td (Highlights: Solved cache avalanche with multi level cache and local cache warmup; Idempotent order creation via unique order id constraint) Tj ET
+BT /F1 12 Tf 72 432 Td (Project: Log Collection Platform - Core Developer) Tj ET
+BT /F1 12 Tf 72 408 Td (Built a distributed log collection platform with Kafka and Flink for real time metrics.) Tj ET
+BT /F1 12 Tf 72 384 Td (Tech: Kafka, Flink, ClickHouse) Tj ET
+BT /F1 12 Tf 72 360 Td (Highlights: Kafka as message hub with exactly once semantics; Flink job state checkpoint for recovery) Tj ET
+BT /F1 12 Tf 72 336 Td (Work Experience:) Tj ET
+BT /F1 12 Tf 72 312 Td (- 2020-now Backend Engineer at a fintech company) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001724 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1794
+%%EOF

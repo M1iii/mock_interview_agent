@@ -1,0 +1,611 @@
+{
+  "resume_01": {
+    "file_name": "resume_01.md",
+    "basic": {
+      "name": "张伟"
+    },
+    "skills": [
+      "Java",
+      "Spring Boot",
+      "Spring Cloud",
+      "Redis",
+      "MySQL",
+      "Kafka"
+    ],
+    "points": [
+      "Java",
+      "Spring Boot",
+      "Spring Cloud",
+      "Redis",
+      "MySQL",
+      "Kafka",
+      "Docker",
+      "Kubernetes",
+      "Elasticsearch",
+      "Nginx",
+      "MySQL 分库分表",
+      "Seata 分布式事务",
+      "电商订单系统",
+      "主导日订单量百万级的电商订单系统重构。使用 Spring Boot + Spring Cloud 微服务架构",
+      "Redis 缓存热点数据"
+    ]
+  },
+  "resume_02": {
+    "file_name": "resume_02.md",
+    "basic": {
+      "name": "李娜"
+    },
+    "skills": [
+      "TypeScript",
+      "Vue 3",
+      "React",
+      "Node.js",
+      "NestJS",
+      "PostgreSQL"
+    ],
+    "points": [
+      "TypeScript",
+      "Vue 3",
+      "React",
+      "Node.js",
+      "NestJS",
+      "PostgreSQL",
+      "Docker",
+      "Vite",
+      "ECharts",
+      "数据可视化中台",
+      "负责数据可视化中台前端架构",
+      "基于 Vue 3 + TypeScript 封装通用图表组件库",
+      "支撑 30+ 业务看板。",
+      "大屏大数据量渲染性能优化",
+      "虚拟滚动 + 按需加载"
+    ]
+  },
+  "resume_03": {
+    "file_name": "resume_03.pdf",
+    "basic": {
+      "name": "Wang Lei"
+    },
+    "skills": [
+      "Python",
+      "Redis",
+      "MySQL",
+      "Docker",
+      "Kubernetes",
+      "Kafka"
+    ],
+    "points": [
+      "Python",
+      "Redis",
+      "MySQL",
+      "Docker",
+      "Kubernetes",
+      "Kafka",
+      "FastAPI",
+      "MySQL sharding",
+      "High Concurrency Order API",
+      "Designed and built a high concurrency order API with FastAPI",
+      "Redis cache and MySQL sharding",
+      "peak 8000 TPS.",
+      "Solved cache avalanche with multi level cache and local cache warmup",
+      "Idempotent order creation via unique order id constraint",
+      "Flink"
+    ]
+  },
+  "resume_04": {
+    "file_name": "resume_04.md",
+    "basic": {
+      "name": "王强"
+    },
+    "skills": [
+      "Spark",
+      "Flink",
+      "Kafka",
+      "Hive",
+      "HDFS",
+      "ClickHouse"
+    ],
+    "points": [
+      "Spark",
+      "Flink",
+      "Kafka",
+      "Hive",
+      "HDFS",
+      "ClickHouse",
+      "Python",
+      "Airflow",
+      "Kubernetes",
+      "实时数仓建设",
+      "基于 Flink + Kafka + ClickHouse 建设实时数仓",
+      "覆盖核心业务 200+ 实时指标",
+      "秒级延迟。",
+      "Flink 精确一次语义保障",
+      "端到端延迟 <5s"
+    ]
+  },
+  "resume_05": {
+    "file_name": "resume_05.md",
+    "basic": {
+      "name": "赵敏"
+    },
+    "skills": [
+      "Python",
+      "pytest",
+      "Selenium",
+      "Appium",
+      "Jenkins",
+      "Docker"
+    ],
+    "points": [
+      "Python",
+      "pytest",
+      "Selenium",
+      "Appium",
+      "Jenkins",
+      "Docker",
+      "JMeter",
+      "GitLab CI",
+      "接口自动化测试平台",
+      "搭建接口自动化测试平台",
+      "基于 Python + pytest 实现用例管理",
+      "定时执行",
+      "报告推送。",
+      "测试数据自动构造与清理机制",
+      "失败用例自动截图与日志归档"
+    ]
+  },
+  "resume_06": {
+    "file_name": "resume_06.md",
+    "basic": {
+      "name": "刘洋"
+    },
+    "skills": [
+      "Java",
+      "Spring Boot",
+      "MySQL",
+      "Redis",
+      "Git",
+      "Linux"
+    ],
+    "points": [
+      "Java",
+      "Spring Boot",
+      "MySQL",
+      "Redis",
+      "Git",
+      "Linux",
+      "校园二手交易平台",
+      "课程设计项目",
+      "实现商品发布",
+      "搜索",
+      "订单交易等功能。",
+      "Redis 缓存商品列表",
+      "减少数据库压力",
+      "Elasticsearch",
+      "个人博客系统"
+    ]
+  },
+  "resume_07": {
+    "file_name": "resume_07.docx",
+    "basic": {
+      "name": "陈静"
+    },
+    "skills": [
+      "Python",
+      "FastAPI",
+      "Django",
+      "PostgreSQL",
+      "Redis",
+      "Celery"
+    ],
+    "points": [
+      "Python",
+      "FastAPI",
+      "Django",
+      "PostgreSQL",
+      "Redis",
+      "Celery",
+      "Docker",
+      "gRPC",
+      "开放平台 API",
+      "负责开放平台 API 开发",
+      "基于 FastAPI 提供 REST 与 gRPC 双协议接入",
+      "日均调用量 3000 万。",
+      "限流与熔断",
+      "令牌桶限流 + 熔断降级",
+      "接口幂等与签名验签体系"
+    ]
+  },
+  "resume_08": {
+    "file_name": "resume_08.md",
+    "basic": {
+      "name": "杨帆"
+    },
+    "skills": [
+      "Kubernetes",
+      "Docker",
+      "Terraform",
+      "Ansible",
+      "Prometheus",
+      "Grafana"
+    ],
+    "points": [
+      "Kubernetes",
+      "Docker",
+      "Terraform",
+      "Ansible",
+      "Prometheus",
+      "Grafana",
+      "Jenkins",
+      "GitLab CI",
+      "Python",
+      "Shell",
+      "容器化平台迁移",
+      "主导公司 200+ 应用从虚拟机迁移至 Kubernetes",
+      "制定迁移规范与灰度方案。",
+      "应用容器化改造",
+      "镜像分层优化 + 资源配额管控"
+    ]
+  },
+  "resume_09": {
+    "file_name": "resume_09.md",
+    "basic": {
+      "name": "周杰"
+    },
+    "skills": [
+      "Kotlin",
+      "Android",
+      "Jetpack Compose",
+      "Retrofit",
+      "SQLite",
+      "Room"
+    ],
+    "points": [
+      "Kotlin",
+      "Android",
+      "Jetpack Compose",
+      "Retrofit",
+      "SQLite",
+      "Room",
+      "Firebase",
+      "Gradle",
+      "短视频社区 App",
+      "负责短视频社区 Android 端开发",
+      "基于 Kotlin + Jetpack Compose 完成首页信息流与播放器。",
+      "信息流滑动性能优化",
+      "复用机制 + 预加载",
+      "视频播放器缓存策略",
+      "WebSocket"
+    ]
+  },
+  "resume_10": {
+    "file_name": "resume_10.md",
+    "basic": {
+      "name": "吴倩"
+    },
+    "skills": [
+      "Python",
+      "Pandas",
+      "SQL",
+      "MySQL",
+      "Tableau",
+      "Airflow"
+    ],
+    "points": [
+      "Python",
+      "Pandas",
+      "SQL",
+      "MySQL",
+      "Tableau",
+      "Airflow",
+      "Hive",
+      "Excel",
+      "用户增长分析体系",
+      "搭建用户增长分析体系",
+      "通过留存/漏斗/分群分析指导运营策略",
+      "活动 ROI 提升 30%。",
+      "AB 实验设计与显著性检验",
+      "用户分群标签体系建设",
+      "经营数据看板"
+    ]
+  },
+  "resume_11": {
+    "file_name": "resume_11.txt",
+    "basic": {
+      "name": "郑浩"
+    },
+    "skills": [
+      "Linux",
+      "Nginx",
+      "TCP/IP",
+      "Shell",
+      "Zabbix",
+      "HAProxy"
+    ],
+    "points": [
+      "Linux",
+      "Nginx",
+      "TCP/IP",
+      "Shell",
+      "Zabbix",
+      "HAProxy",
+      "Docker",
+      "ELK",
+      "Keepalived",
+      "高可用负载均衡架构",
+      "基于 HAProxy + Nginx 构建四层/七层高可用负载均衡架构",
+      "支撑线上业务双活。",
+      "VIP 漂移与故障自动切换",
+      "TLS 证书统一管理与自动续期",
+      "监控告警体系"
+    ]
+  },
+  "resume_12": {
+    "file_name": "resume_12.md",
+    "basic": {
+      "name": "冯丽"
+    },
+    "skills": [
+      "Python",
+      "PyTorch",
+      "TensorFlow",
+      "Transformer",
+      "Milvus",
+      "FastAPI"
+    ],
+    "points": [
+      "Python",
+      "PyTorch",
+      "TensorFlow",
+      "Transformer",
+      "Milvus",
+      "FastAPI",
+      "ONNX",
+      "Docker",
+      "智能问答系统",
+      "基于检索增强生成搭建企业智能问答系统",
+      "向量检索 + LLM 生成",
+      "回答准确率 85%。",
+      "向量召回 + 重排序两阶段检索",
+      "低质答案检测与兜底策略",
+      "图像分类服务"
+    ]
+  },
+  "resume_13": {
+    "file_name": "resume_13.md",
+    "basic": {
+      "name": "何平"
+    },
+    "skills": [
+      "Java",
+      "Spring Boot",
+      "MySQL",
+      "Redis",
+      "Git",
+      "MyBatis"
+    ],
+    "points": [
+      "Java",
+      "Spring Boot",
+      "MySQL",
+      "Redis",
+      "Git",
+      "MyBatis",
+      "仓储管理系统",
+      "参与仓储管理系统开发",
+      "负责入库/出库模块接口实现。",
+      "库存扣减并发控制"
+    ]
+  },
+  "resume_14": {
+    "file_name": "resume_14.md",
+    "basic": {
+      "name": "罗强"
+    },
+    "skills": [
+      "Go",
+      "Gin",
+      "gRPC",
+      "Redis",
+      "MongoDB",
+      "Nginx"
+    ],
+    "points": [
+      "Go",
+      "Gin",
+      "gRPC",
+      "Redis",
+      "MongoDB",
+      "Nginx",
+      "Docker",
+      "Kubernetes",
+      "微服务网关",
+      "基于 Go + gRPC 开发微服务网关",
+      "统一鉴权",
+      "限流",
+      "路由转发",
+      "峰值 1 万 QPS。",
+      "限流器实现"
+    ]
+  },
+  "resume_15": {
+    "file_name": "resume_15.md",
+    "basic": {
+      "name": "高翔"
+    },
+    "skills": [
+      "Java",
+      "微服务",
+      "Spring Cloud",
+      "MySQL",
+      "Redis",
+      "Kafka"
+    ],
+    "points": [
+      "Java",
+      "微服务",
+      "Spring Cloud",
+      "MySQL",
+      "Redis",
+      "Kafka",
+      "分布式事务",
+      "Kubernetes",
+      "高并发",
+      "架构设计",
+      "核心交易系统重构",
+      "主导核心交易系统微服务化重构",
+      "服务拆分 60+",
+      "系统可用性提升至 99.99%。",
+      "分布式事务方案选型"
+    ]
+  },
+  "resume_16": {
+    "file_name": "resume_16.pdf",
+    "basic": {
+      "name": "Chen Ming"
+    },
+    "skills": [
+      "TypeScript",
+      "Vue 3",
+      "Vite",
+      "Pinia",
+      "ECharts",
+      "Node.js"
+    ],
+    "points": [
+      "TypeScript",
+      "Vue 3",
+      "Vite",
+      "Pinia",
+      "ECharts",
+      "Node.js",
+      "Admin Dashboard",
+      "Built an admin dashboard with Vue 3 and TypeScript",
+      "reusable chart components with ECharts.",
+      "Virtual scroll for large tables",
+      "Module federation for micro frontend",
+      "SSR Marketing Site",
+      "Developed a server side rendered marketing site with Node.js and Vite for SEO.",
+      "SSR performance tuning and caching"
+    ]
+  },
+  "resume_17": {
+    "file_name": "resume_17.md",
+    "basic": {
+      "name": "孙芳"
+    },
+    "skills": [
+      "Vue 3",
+      "TypeScript",
+      "Vite",
+      "Pinia",
+      "ECharts",
+      "Webpack"
+    ],
+    "points": [
+      "Vue 3",
+      "TypeScript",
+      "Vite",
+      "Pinia",
+      "ECharts",
+      "Webpack",
+      "Node.js",
+      "低代码搭建平台",
+      "参与低代码搭建平台开发",
+      "基于 Vue 3 实现组件拖拽",
+      "Schema 渲染与发布。",
+      "Schema 驱动渲染引擎设计",
+      "组件拖拽性能优化",
+      "营销活动 H5",
+      "负责营销活动 H5 开发"
+    ]
+  },
+  "resume_18": {
+    "file_name": "resume_18.md",
+    "basic": {
+      "name": "徐磊"
+    },
+    "skills": [
+      "Java",
+      "Netty",
+      "ZooKeeper",
+      "Kafka",
+      "RocketMQ",
+      "MySQL"
+    ],
+    "points": [
+      "Java",
+      "Netty",
+      "ZooKeeper",
+      "Kafka",
+      "RocketMQ",
+      "MySQL",
+      "高并发",
+      "分布式",
+      "Paxos",
+      "消息中间件平台",
+      "参与自研消息中间件研发",
+      "基于 Netty 构建高性能网络层",
+      "单机吞吐 10 万 TPS。",
+      "消息可靠投递",
+      "ack 机制与重试队列"
+    ]
+  },
+  "resume_19": {
+    "file_name": "resume_19.txt",
+    "basic": {
+      "name": "胡军"
+    },
+    "skills": [
+      "MySQL",
+      "PostgreSQL",
+      "Redis",
+      "主从复制",
+      "分库分表",
+      "备份恢复"
+    ],
+    "points": [
+      "MySQL",
+      "PostgreSQL",
+      "Redis",
+      "主从复制",
+      "分库分表",
+      "备份恢复",
+      "性能调优",
+      "Shell",
+      "数据库高可用架构",
+      "基于 MySQL 主从复制 + MHA 构建高可用架构",
+      "RTO 控制在 5 分钟内。",
+      "半同步复制保障数据一致性",
+      "故障切换演练常态化",
+      "数据治理平台",
+      "建设元数据管理与数据质量平台"
+    ]
+  },
+  "resume_20": {
+    "file_name": "resume_20.md",
+    "basic": {
+      "name": "林悦"
+    },
+    "skills": [
+      "HTML",
+      "CSS",
+      "JavaScript",
+      "Vue 3",
+      "TypeScript",
+      "Git"
+    ],
+    "points": [
+      "HTML",
+      "CSS",
+      "JavaScript",
+      "Vue 3",
+      "TypeScript",
+      "Git",
+      "个人作品集网站",
+      "基于 Vue 3 搭建个人作品集网站",
+      "展示项目与博客。",
+      "响应式布局与动画优化"
+    ]
+  }
+}

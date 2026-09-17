@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-09-17 · P2 交付完成（简历解析/双来源出题/SqliteSaver 持久化/web_verify + 验收）
+
+**描述**：P2 阶段（Task 1~11）全部交付并通过端到端验收。① **简历域**：多格式上传（md/txt/docx/pdf，≤20MB）→ 轻量解析（pdfplumber + python-docx）→ LLM 结构化抽取（基本信息/技能/项目经历）+ 考点清单（≥10 项，独立成表支撑 COUNT 验收）→ 题面由出题节点实时生成（只持久化素材，不建题库）。② **双来源出题**：按面试类型配比落位（技术面 3 道 / 行为面 8 道 / 综合面 5 道，按 10 题计），降级链 简历→知识库→纯通用。③ **持久化**：会话元数据与 LangGraph checkpoint 同库落 SQLite（interview.db 异表），后端重启后会话列表、对话历史与续聊均恢复。④ **web_verify**：LLM 事实性判定 → 博查 Web Search → LLM 二次判定三态（verified/uncertain/unconfirmed，已确认为评估节点自动核验、静默降级），核验结果并入 SSE `assess` 事件与报告汇总。⑤ **前端**：简历管理页 + 会话关联（面试类型 + 简历下拉）+ 评估面板核验徽标/信源 + 配置页搜索 Key + 报告页核验汇总。验收：自建 20 份多格式简历语料与金标，独立脚本 `_acceptance_p2.py` 实测 **passed=12 failed=0**（退出码 0，本次无 FAIL 项）。PRD 四处漂移修订已在 P2 早期落地，本次核验一致（无偏差、未再改动）。
+
+**变更内容**
+- 语料 + 金标（新增）：`tests/acceptance/resumes/` 20 份（15 MD + 2 TXT + 1 DOCX + 2 PDF）；每份含基本信息 / 技能清单（≥6 项）/ 2-3 段项目经历（技术选型 + 难点）/ 工作经历，虚构人物（中文名或拼音），字段完整度分高/中/低三档；2 份 PDF 用最小合法 PDF 生成器手写文字层（对象流 + 正确 xref 偏移，不新增依赖；pdfplumber 实测抽取 873 / 693 字符）；`tests/acceptance/resume_gold.json`（20 个 stem 键：`file_name` / `basic.name` / `skills`≥5 / `points`≥10，取自简历原文）
+- 验收脚本（新增）：`_acceptance_p2.py`（项目根，不参与 pytest 收集）——仿 `_acceptance_p1.py`：Report 类 + `--only p2-1..p2-5|all` + `--keep` + 退出码 0/1 + 「标准/实测/结论」日志 + 默认清理（删验收简历记录与原文件、测试会话、恢复 verify-key、删 P2-3 临时库）。P2-1 用 `TestClient` 走真实上传流（Starlette 后台任务同步终态）+ `ResumeStore` 直读 `profile_json` / `points` 校验；P2-2 纯函数复算配比 + fake LLM（回显考点清单块）断言题干含 gold 考点关键词；P2-3 进程内模拟重启（`SqliteSessionStore` + `create_checkpointer` 同库重建两实例）；P2-4 占位 verify Key + `BochaClient.search` 类属性补丁（真实对话提交事实性回答）+ 未配置 Key 跳过路径；P2-5 端到端（简历关联会话 → 答 1 题 → skip 其余 → finish → 报告与导出）
+- 应用侧（Task 1~8 交付摘要，随本条目汇总归档）：`app/config.py` 增 interview/resume/verify 配置节 + env 覆盖；`langgraph-checkpoint-sqlite` 依赖；`app/store/sessions.py` `SqliteSessionStore`（interview_type/resume_id + 启动 Key 回退）；`app/store/checkpointer.py` SqliteSaver；`app/store/resume.py`（resumes + resume_points + 级联删）；`app/resume/{parsers,extract,tasks}.py`；`app/api/resume.py`（上传/列表/重试/删除）；`app/interview/ratio.py` + `ask_question_node` 双来源分支；`app/verify/{bocha,verify}.py` + `evaluate_node` 接入 + `PUT/GET /api/settings/verify-key`
+- 前端（Task 9/10 交付摘要）：`web/src/views/ResumeView.vue`（上传/轮询/重试/删除）+ ChatView 面试类型与简历关联 + 评估面板核验徽标与信源 + 配置页搜索 Key + 报告页核验汇总（`ReportSummary.verified` 类型为 `{question, reason}[]`，由系统在摘要解析后填充）
+- 文档漂移修订（P2 早期落地，本次核验一致）：`docs/prd.md` §4 F3（轻量解析 + 考点清单表述）、§5 R4（移除 `[P2 待确认触发方式]`，补「已确认：评估节点自动核验，静默降级」）、§6 P2（配比表述）、§6 N-9（上传分档 知识库 ≤50MB / 简历 ≤20MB）、§8（待确认项清空）
+- 文档落档：`docs/project-status.md`（§3 阶段 P2 完成 / §4 追加 P2 条目 / §5 已知问题 / §8 决策日志）、`CHANGELOG.md`
+
+**验证结果**
+- `uv run python _acceptance_p2.py` → SUMMARY **passed=12 failed=0**（退出码 0，无 FAIL 项）：
+  - P2-1 解析成功率 **20/20 = 100%**（标准 ≥90%）；字段命中率（name 子串 + skills 关键词）**20/20 = 100%**（标准 ≥85%）；考点清单落表一致（`point_count == list_points 行数 ≥ 10`）PASS
+  - P2-2 考点清单 ≥10 项（20 份 ready 全部通过）；配比复算 cfg={technical 0.3, behavioral 0.8, comprehensive 0.5} 且 `resume_question_indices(10, r)` = [1,4,7] / [1,2,3,4,6,7,8,9] / [1,3,5,7,9]；简历来源题干含 gold 考点关键词 **38/40 = 95%**（抽样题干命中 3/3 = 100%，标准 ≥80%）
+  - P2-3 会话记录恢复（同库重建）PASS；对话历史恢复（messages / question_index / resume_id）PASS
+  - P2-4 已配置 Key + 搜索补丁：`verification.status=verified`、claims 3 条、sources 6 条；未配置 Key：`verification=null`（跳过路径不阻断评估）
+  - P2-5 端到端：报告 1402 字符含「面试报告」+ 结构化摘要为 dict；`GET /api/sessions/{id}/report` 200 PASS
+- 回归：`uv run pytest tests -q` **266 passed**（15.93s，仅 1 条三方 DeprecationWarning）；`uv run ruff check app/ tests/` 全通过（101 files already formatted）；`cd web; npm run build` 构建成功
+- 应用缺陷归因：**本次无应用缺陷 FAIL**（未修改任何 `app/` 代码）。脚本自身缺陷 1 处已修（首轮 P2-1 校验循环把文件名 str 当 Path 用，抛 `AttributeError`；改为按文件名取 gold 与 DB 记录）并顺带按 ruff 规范修正 13 处（未用导入 / 行宽 / SIM105），重跑全通过
+- 环境偏差（如实记录）：收尾时 Qdrant(6333)/ES(9200)/TEI(8081) **未监听**（Docker Desktop 未运行，且 TRAE 沙箱拦截 Docker Desktop 数据目录导致无法启动）→ `_acceptance_p1.py` 复跑**无法执行**；P1 侧回归证据降级为 pytest 266 例 + ruff + 前端 build，P1-3（28%）与 P1-4 decline 搁置项维持既有记录，待真实环境启动三服务后复跑复测。P2 五项本身不依赖真实检索服务（P2-5 的 kb 检索路在服务缺失时静默降级，不影响判定）
+
+**项目结构更新**
+- 新增（本次提交）：`tests/acceptance/resumes/`（20 份语料）、`tests/acceptance/resume_gold.json`、`_acceptance_p2.py`
+- P2 累计新增模块：`app/resume/`、`app/verify/`、`app/store/resume.py`、`app/interview/ratio.py`、`app/interview/prompts/resume_question.py`、`web/src/views/ResumeView.vue`；配套测试 `tests/test_resume_*.py`、`tests/test_ratio.py`、`tests/test_verify.py`、`tests/test_bocha.py` 等
+- 文档：`docs/prd.md`、`docs/project-status.md`、`CHANGELOG.md`
+
 ## 2026-09-17 · P1-3 引用上卷修复 + P1-4 降级阈值调优（缺陷搁置落档）
 
 **描述**：针对 P1 验收两项 FAIL 实施修复。① **P1-3 引用上卷**：引用文本装配从「命中子块文本」改为「按 `parent_id` 回查 ES 父块全文」（新增 `_backfill_parent_text`，失败回退子块文本），并取消 prompt 侧截断，引用文本由裸 Markdown 标题变为「标题 + 正文」父块全文。② **P1-4 降级阈值**：新增 `score_threshold`（Qdrant 语义分下限）与 `min_should_match`（ES 泛匹配过滤）两项可配置参数。修复后复测：P1-3 引用准确率 **12% → 28%**（judged 恢复 50/50，cites 40/144），P1-4 前三子项（双路 normal / 语义单路 fallback / 关键词单路 fallback）全部恢复 PASS。**P1-3（28%，标准 ≥90%）与 P1-4 decline 子项（bge cosine 分布与分级阈值不匹配，任何 score_threshold 取值均两难）按用户裁决搁置**，记入 `docs/project-status.md` §5 待处理问题，待 P2 阶段完成后回来排查文档/题库质量并重新设计降级策略后复测。

@@ -27,11 +27,15 @@
 
 ## 3. 当前阶段
 
-**阶段：P1 验收完成 + 引用上卷修复完成（2026-09-17）——passed=11 failed=3，P1-3（28%）与 P1-4 decline 子项搁置待 P2 后排查复测；进入 P2 需求澄清**
+**阶段：P2 交付完成 + 端到端验收通过（2026-09-17）——简历解析入库（P2-1）/ 双来源出题（P2-2）/ SqliteSaver 跨重启持久化（P2-3）/ web_verify 事实核验（P2-4）/ 端到端链路（P2-5）全部落地，独立脚本 `_acceptance_p2.py` 实测 passed=12 failed=0；P1-3（28%）与 P1-4 decline 子项搁置项顺延，待真实检索环境恢复后复测**
+
+P2 交付物：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF）+ 金标 `tests/acceptance/resume_gold.json`；验收脚本 `_acceptance_p2.py`（`--only`/`--keep` + 退出码 0/1 + 默认清理验收数据）；后端简历域（解析/抽取/考点清单/双来源出题/持久化/核验）与前端简历页 + 会话关联 + 核验展示。
 
 按用户 3 阶段工作流（需求澄清 → 分步执行 → 验收总结）。P0 已具备执行条件：边界、非功能、8 项产品决策、技术栈、架构草案全部落档。
 
 **实测项延后决策（2026-09-16）**：A-4 浏览器控制台无报错 / N-1 性能 P95 / N-6 浏览器兼容 / P0-2 二十轮串扰与 P0-5 五并发压测，统一留待阶段收尾实测——N-1 待 P1 检索链路稳定后测更准（回复耗时构成将加入检索耗时）；A-4 在 P1 前端开发时随手自查。
+
+**P2 收尾环境偏差（2026-09-17）**：本次 P2 验收开始时 Qdrant(6333)/ES(9200)/TEI(8081) 均未监听（Docker Desktop 未运行；沙箱内无法启动 Docker Desktop，其数据目录访问被拦截），故 P2-1~P2-5 全部在不依赖检索服务的路径下完成（P2 五项本身不要求真实检索；P2-5 的 kb 检索路已在缺失时静默降级）；**P1 验收脚本复跑因此无法执行**，P1 侧回归证据为 pytest 全量（266 例）+ ruff + 前端 build，P1-3/P1-4 既有 FAIL 记录维持不变。
 
 ## 4. 已完成事项
 
@@ -73,19 +77,34 @@
 - [x] P1 验收执行（2026-09-17）：自建 5 篇多栈 MD 语料（50 考点）+ 50 题预标出处题库 + 独立脚本 `_acceptance_p1.py` 全量串行，实测 **passed=11 failed=3**——P1-1 入库 5/5=100%、P1-2 召回 50/50=100%、P1-5 删除级联三处 0 拋留、P1-6 P95=134ms、P1-7 切换重建（ok=5/绑定一致/抽样 5/5）通过；**FAIL 3 项**：P1-3 引用准确率 12%（引用文本取命中子块→大量裸 Markdown 标题，应用缺陷）、P1-4 decline 子项（语义路无相似度截断→decline 在 Qdrant 在线时不可达，应用缺陷）、P1-7 观察项（查询模型≠绑定模型拒绝校验未实现，记录型 FAIL）；验收报告 `docs/acceptance/p1-acceptance-report.md`
 - [x] P1-3 引用上卷修复 + P1-4 降级阈值调优（2026-09-17）：`retrieve.py` 新增 `_backfill_parent_text`（语义路命中后按 parent_id mget ES 父块全文，失败回退子块文本）；`nodes/__init__.py` `_SNIPPET_LEN` 120→0（不截断，父块全文≤800 字直接注入 prompt）；`config.py` 新增 `score_threshold=0.0`（Qdrant 不过滤）+ `min_should_match=25%`（ES 泛匹配过滤）；223 例 pytest + ruff + 前端 build 全通过。复测结果：P1-3 从 12%→28%（judged=50/50，cites=40/144）、P1-4 前 3 子项 PASS（双路 normal/语义 fallback/关键词 fallback）、decline 子项仍 FAIL（score_threshold=0 不过滤→无关查询仍返回 top-k 命中）。**P1-3 28% 与 P1-4 decline 子项按用户裁决搁置，待 P2 完成后排查文档/题库质量 + 重新设计降级策略后复测**
 
+- [x] P2 设计定稿 + 11 任务实施计划（2026-09-17）：`docs/superpowers/specs/2026-09-17-p2-resume-persistence-design.md` + `docs/superpowers/plans/2026-09-17-p2-resume-persistence-plan.md`——简历解析 + 考点清单 / 双来源出题配比 / SqliteSaver 持久化 / web_verify / 前端三页；含 Task 3/6 前置修正（ResumeStore 建表顺序）
+- [x] P2 Task 1：依赖 + 配置扩展（2026-09-17）：新增 `langgraph-checkpoint-sqlite` 依赖；`app/config.py` 增 `interview.db` / `resume.*`（db、upload_dir、max_upload_mb=20、ratio 三档） / `verify.*` 配置节 + 环境变量覆盖（`INTERVIEW_DB` / `RESUME_DB` / `RESUME_UPLOAD_DIR` / `RESUME_MAX_MB` / `RESUME_RATIO_*` / `VERIFY_*`）；`.env.example` 同步补项
+- [x] P2 Task 2：会话元数据落 SQLite（2026-09-17）：`app/store/sessions.py` 新增 `SqliteSessionStore`（sessions 表含 `interview_type` / `resume_id`）；lifespan 改用 SQLite 存储；会话 Key 快照缺失时回退全局 Key（支撑重启后续聊）
+- [x] P2 Task 3：checkpointer 换 SqliteSaver（2026-09-17）：`app/store/checkpointer.py` 传 cfg 时返回 `SqliteSaver`（与会话元数据同库 interview.db 异表），无 cfg 回退 `MemorySaver`；`delete_thread` 级联删除仍生效（N-8）
+- [x] P2 Task 4：简历域存储（2026-09-17）：`app/store/resume.py`——resumes + resume_points 两表（考点清单独立成表支撑 COUNT 验收），`point_count` 冗余计数，删除级联（FK CASCADE）返回原文件路径供物理删
+- [x] P2 Task 5：简历解析 + LLM 结构化抽取（2026-09-17）：`app/resume/parsers.py` 复用 P1 轻量解析（MD/TXT/DOCX/PDF）；`app/resume/extract.py` EXTRACT_PROMPT → basic/skills/projects + 考点清单（≥10 项，含 category/title/detail/source_snippet）
+- [x] P2 Task 6：简历后台任务 + 简历 API（2026-09-17，P2-1）：`app/resume/tasks.py`（processing→ready/failed 状态机，失败保留原文件可重试）+ `app/api/resume.py`（上传 ≤20MB，md/txt/docx/pdf；列表 / 重试 / 删除级联物理删）
+- [x] P2 Task 7：双来源出题（2026-09-17，P2-2）：`app/interview/ratio.py`（`resume_question_indices` 配比落位：技术面 3 / 行为面 8 / 综合面 5，按 10 题计）+ `ask_question_node` 简历题/知识库题分支 + 降级链（简历不可用→知识库→纯通用）
+- [x] P2 Task 8：web_verify 后端（2026-09-17，P2-4）：`app/verify/bocha.py`（博查 Web Search 客户端，Key 缺失/网络异常抛 `BochaError`）+ `app/verify/verify.py`（LLM 事实性判定 → 搜索 → LLM 二次判定三态 verified/uncertain/unconfirmed）+ `evaluate_node` 接入 + `PUT/GET /api/settings/verify-key`；未配置 Key / 失败一律静默降级不阻断评估
+- [x] P2 Task 9：前端·简历管理页 + 会话关联（2026-09-17，P2-1/P2-2 UI）：`web/src/views/ResumeView.vue`（上传/状态轮询/重试/删除）+ ChatView 新建会话支持面试类型与简历下拉 + `api/client.ts` 简历接口；轮询对齐 KnowledgeView 模式（setInterval + 卸载清理）
+- [x] P2 Task 10：前端·核验展示 + 搜索 Key 配置 + 报告汇总（2026-09-17，P2-4 UI）：评估面板核验徽标与信源列表 + 配置页搜索 Key 区块 + 报告页核验汇总（`ReportSummary.verified` 类型修正为 `{question, reason}[]`，由系统在摘要解析后填充）
+- [x] P2 Task 11：端到端验收 + 语料 + 文档落档（2026-09-17，P2-5）：20 份多格式简历语料（15 MD + 2 TXT + 1 DOCX + 2 PDF，手写最小合法 PDF 文字层）+ 金标 `tests/acceptance/resume_gold.json`（20 stem：file_name/name/skills≥5/points≥10）+ 独立验收脚本 `_acceptance_p2.py` + PRD 四处漂移修订核验 + CHANGELOG / 本文档落档
+- [x] P2 端到端验收执行（2026-09-17）：`uv run python _acceptance_p2.py` → **passed=12 failed=0（退出码 0）**：P2-1 解析成功率 20/20=100%、字段命中 20/20=100%、考点清单落表一致；P2-2 考点清单 ≥10 全通过、配比复算 [1,4,7]/[1,2,3,4,6,7,8,9]/[1,3,5,7,9]、简历来源题干含考点关键词 38/40=95%（题干命中 3/3）；P2-3 会话记录 + 对话历史（同库重建）恢复；P2-4 事实核验 status=verified（3 claims / 6 sources）+ 未配置 Key 跳过（verification=null）；P2-5 端到端（报告 1402 字符 + 结构化摘要 dict + GET /report 200）；**本次无 FAIL 项**（详见 CHANGELOG 顶部条目）
+
 ## 5. 已知问题 / 待确认 / 风险
 
 | 类别 | 内容 | 状态 |
 |---|---|---|
+| 已确认 | P2 web_verify 触发方式：评估节点自动核验，静默降级 | 2026-09-17 确认（PRD §5 R4 / §8） |
 | 待确认 | 降级相关性阈值（默认 0.6） | P1 启用时确认 |
-| 待确认 | P2 web_verify 触发方式 | P2 澄清时确认 |
 | 搁置·P1-3 | 引用准确率 28%（标准≥90%），judged=50/50——回查父块全文已生效但准确率仍低，需排查文档/题库质量 + 裁判口径 | P2 完成后回来排查复测 |
 | 搁置·P1-4 | decline 子项：bge cosine 分布与分级阈值不匹配，score_threshold 任何值都两难（过滤则误杀正常查询，不过滤则无关查询走 fallback）；需重新设计降级策略 | P2 完成后回来重新设计 |
-| 已知限制 | P0 断点续聊为内存态，后端重启会话丢失（前端提示） | 按边界确认接受，P2 解决 |
-| 已知限制 | P0 会话元数据存内存，重启后会话列表清空 | 同上，P2 随 SqliteSaver 落 SQLite |
+| 环境阻塞·P1 复跑 | 本次收尾 Qdrant(6333)/ES(9200)/TEI(8081) 未监听（Docker Desktop 未运行，且 TRAE 沙箱拦截 Docker Desktop 数据目录致无法启动）→ `_acceptance_p1.py` 复跑无法执行；P1 侧回归证据降级为 pytest 266 例 + ruff + 前端 build（P1-3/P1-4 既有 FAIL 记录不变） | 待用户在真实环境启动三服务后复跑 P1 并复测两项搁置 |
+| 已知限制 | P0 断点续聊为内存态，后端重启会话丢失（前端提示） | 已由 P2 Task 2/3 解决（会话元数据 + checkpoint 落 SQLite） |
+| 已知限制 | P0 会话元数据存内存，重启后会话列表清空 | 已由 P2 Task 2 解决（sessions 表落 SQLite interview.db） |
 | 风险 | 全局单流式为进程内锁，多进程部署需换外部锁 | 已知扩展点，当前单进程无影响 |
 | 风险 | DeepSeek 限流触发时按 R2 重试 + fallback | 验收基线需正常配额 |
-| 环境注意 | TRAE 沙箱对 `~/.cache` 与 `%LOCALAPPDATA%\Temp` 只读，pre-commit 需重定向 `PRE_COMMIT_HOME`/`TMP`/`TEMP` 到项目内 `.tmp/` 并以 Conda base Python（`D:\miniconda\python.exe -m pre_commit`）运行 | 步骤 1 已绕行，后续会话沿用；git commit 钩子同样受限 |
+| 环境注意 | TRAE 沙箱对 `~/.cache` 与 `%LOCALAPPDATA%\Temp` 只读，pre-commit 需重定向 `PRE_COMMIT_HOME`/`TMP`/`TEMP` 到项目内 `.tmp/` 并以 Conda base Python（`D:\miniconda\python.exe -m pre_commit`）运行 | 步骤 1 已绕行，后续会话沿用；git commit 钩子同样受限（P2 收尾沿用） |
 
 ## 6. 下一步（P0 分步执行）
 
@@ -179,3 +198,7 @@
 - 2026-09-17 P1 步骤 7 完成：出题节点改造（仅出题注入：RetrievalContext 注入 + 参考资料区块 + [n] 角标 + 四级降级出题 fallback 弱提示 / decline 纯通用 + SSE citations 事件 + 前端来源折叠 + 会话关联知识库）；211 例 pytest + 真实服务冒烟（`_smoke_tip7.py`）→ CHANGELOG + §4/§6.6
 - 2026-09-17 P1 步骤 8 完成：答案增强——评估节点复用出题检索结果（方案 A：检索仍仅出题节点、不新增调用；取向 1：知识库优先、自身知识兜底）→ 评语 [n] 角标 + assess 事件携带 citations + 评估面板来源折叠；无 kb/decline 纯 LLM 评估；217 例 pytest + ruff + 前端 build → CHANGELOG + §4/§6.6
 - 2026-09-17 P1 验收执行（passed=11 failed=3，未整体通过）：P1-3 引用准确率 12% 与 P1-4 decline 不可达判定为应用层真实缺陷，用户裁决「不改 app、记 FAIL 落档待后续修复」；P1-7 查询拒绝校验缺口记录为观察项待用户裁决 → `docs/acceptance/p1-acceptance-report.md` + CHANGELOG + §3/§4/§6.6
+- 2026-09-17 P2 设计定稿（简历解析 + 考点清单 / 双来源出题配比 / SqliteSaver 持久化 / web_verify 评估节点自动核验静默降级）→ `docs/superpowers/specs/2026-09-17-p2-resume-persistence-design.md` + 计划 11 任务 + PRD §5 R4 / §8
+- 2026-09-17 P2 Task 1~10 完成（配置扩展 / 会话元数据 SQLite / SqliteSaver / 简历域存储 / 解析抽取 / 简历 API / 双来源出题 / web_verify / 前端简历页·会话关联·核验展示）→ CHANGELOG + §4
+- 2026-09-17 P2 Task 11 端到端验收通过（`_acceptance_p2.py` passed=12 failed=0）+ PRD 四处漂移修订核验（§4 F3 / §5 R4 / §6 P2 / §6 N-9 + §8）→ CHANGELOG + §3/§4/§5
+- 2026-09-17 P2 收尾环境偏差记录：Qdrant/ES/TEI 未监听致 P1 复跑无法执行（沙箱无法启动 Docker Desktop），P1 既有 FAIL 维持 → §3/§5
