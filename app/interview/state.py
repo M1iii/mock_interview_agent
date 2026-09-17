@@ -7,7 +7,7 @@ from langgraph.graph.message import add_messages
 
 
 class Score(TypedDict):
-    """单题评分记录。"""
+    """单题评分记录（键与 evaluate_node 实际写入保持一致）。"""
 
     question: str
     answer: str
@@ -15,6 +15,8 @@ class Score(TypedDict):
     comment: str
     dimensions: dict[str, float]
     citations: list[dict]  # P1 Tip 8：本题引用元数据（评估面板 & 报告展示用）
+    topic: str  # 当前题主题标签（evaluate 从 _topic 透传，报告/面板展示）
+    verification: dict | None  # P2-4：本题事实性核验结论（未核验/跳过为 None）
 
 
 class InterviewState(TypedDict, total=False):
@@ -39,8 +41,9 @@ class InterviewState(TypedDict, total=False):
     kb_id: str | None  # P1 关联知识库 ID（会话级，出题检索范围）
     resume_id: str | None  # P2 关联简历 ID（会话级，双来源出题）
     interview_type: str  # P2 面试类型：technical / behavioral / comprehensive
-    # --- 运行时注入（不持久化，每次 invoke 时注入）---
-    _api_key: str  # 会话级 API Key 快照
+    # --- 运行时注入（不落盘：checkpointer 写盘前由 serde 剔除 `_api_key`，
+    #     每次 invoke/update_state 由调用方重新注入；见 app/store/checkpointer.py）---
+    _api_key: str  # 会话级 API Key 快照（仅内存态有效）
     _topic: str  # 当前题主题标签
     _needs_followup: bool  # evaluate 输出：是否需要追问
     _followup_reason: str  # evaluate 输出：追问原因
