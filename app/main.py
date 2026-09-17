@@ -22,7 +22,7 @@ from app.retrieval.qdrant import QdrantManager
 from app.retrieval.retrieve import RetrievalContext
 from app.store.checkpointer import create_checkpointer
 from app.store.knowledge import KnowledgeStore
-from app.store.sessions import InMemorySessionStore
+from app.store.sessions import SqliteSessionStore
 
 WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
 
@@ -35,9 +35,12 @@ async def lifespan(app: FastAPI):
     app.state.config = cfg
     app.state.llm_client = DeepSeekClient(cfg)
     app.state.key_store = KeyStore()
-    app.state.session_store = InMemorySessionStore()
+    if cfg.llm.api_key:
+        # P2-3：重启后用 .env 的 LLM_API_KEY 恢复全局 Key，会话快照缺失时回退它
+        app.state.key_store.set_global_key(cfg.llm.api_key)
+    app.state.session_store = SqliteSessionStore(PROJECT_ROOT / cfg.interview.db)
     app.state.knowledge_store = KnowledgeStore(PROJECT_ROOT / cfg.retrieval.kb_db)
-    app.state.checkpointer = create_checkpointer()
+    app.state.checkpointer = create_checkpointer(cfg)
     # P1 检索服务：懒加载 manager，启动不探测不阻塞；缺失时知识库功能降级
     app.state.qdrant = QdrantManager(cfg)
     app.state.es = ESManager(cfg)

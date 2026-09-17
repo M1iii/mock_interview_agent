@@ -2,7 +2,9 @@ import asyncio
 
 from httpx import ASGITransport, AsyncClient
 
+from app.llm.keys import KeyStore
 from app.main import app
+from app.store.sessions import SqliteSessionStore
 
 
 async def _set_key(client: AsyncClient, key: str = "sk-testkey123456"):
@@ -32,6 +34,8 @@ async def test_set_api_key_invalid_prefix():
 
 async def test_get_api_key_not_set():
     async with app.router.lifespan_context(app):
+        # P2-3：lifespan 会从 .env 恢复全局 Key，这里重置以测试无 Key 场景
+        app.state.key_store = KeyStore()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/api/settings/api-key")
@@ -55,6 +59,8 @@ async def test_get_api_key_after_set():
 
 async def test_create_session_without_key():
     async with app.router.lifespan_context(app):
+        # P2-3：lifespan 会从 .env 恢复全局 Key，这里重置以测试无 Key 场景
+        app.state.key_store = KeyStore()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
@@ -143,8 +149,10 @@ async def test_create_session_invalid_question_count():
             assert resp.status_code == 422
 
 
-async def test_list_sessions_empty():
+async def test_list_sessions_empty(tmp_path):
     async with app.router.lifespan_context(app):
+        # 隔离：P2 起 lifespan 用共享 data/interview.db，此用例需空存储
+        app.state.session_store = SqliteSessionStore(tmp_path / "interview.db")
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/api/sessions")
@@ -152,8 +160,10 @@ async def test_list_sessions_empty():
             assert resp.json() == []
 
 
-async def test_list_sessions_after_create():
+async def test_list_sessions_after_create(tmp_path):
     async with app.router.lifespan_context(app):
+        # 隔离：P2 起 lifespan 用共享 data/interview.db，此用例需空存储
+        app.state.session_store = SqliteSessionStore(tmp_path / "interview.db")
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await _set_key(client)
@@ -165,8 +175,10 @@ async def test_list_sessions_after_create():
             assert len(data) == 2
 
 
-async def test_delete_session():
+async def test_delete_session(tmp_path):
     async with app.router.lifespan_context(app):
+        # 隔离：P2 起 lifespan 用共享 data/interview.db，此用例需空存储
+        app.state.session_store = SqliteSessionStore(tmp_path / "interview.db")
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await _set_key(client)

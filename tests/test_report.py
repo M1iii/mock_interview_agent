@@ -4,6 +4,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.interview.graph import compile_graph
 from app.main import app
+from app.store.sessions import SqliteSessionStore
 
 
 def _make_llm_ask():
@@ -206,9 +207,11 @@ async def test_get_report_success():
             assert data["summary"] is None
 
 
-async def test_status_synced_after_natural_finish():
+async def test_status_synced_after_natural_finish(tmp_path):
     """自然结束（5 轮问答全部完成）后 SessionStore status 同步为 finished。"""
     async with app.router.lifespan_context(app):
+        # 隔离：P2 起 lifespan 用共享 data/interview.db，此用例断言列表长度需空存储
+        app.state.session_store = SqliteSessionStore(tmp_path / "interview.db")
         llm = _make_llm_natural(
             5,
             '{"question": "test", "topic": "test"}',

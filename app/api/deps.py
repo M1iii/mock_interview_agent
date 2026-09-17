@@ -10,7 +10,7 @@ from app.retrieval.embedding import EmbeddingProvider
 from app.retrieval.es import ESManager
 from app.retrieval.qdrant import QdrantManager
 from app.store.knowledge import KnowledgeStore
-from app.store.sessions import InMemorySessionStore, SessionMeta
+from app.store.sessions import SessionMeta, SqliteSessionStore
 
 
 def get_llm_client(request: Request) -> DeepSeekClient:
@@ -21,7 +21,7 @@ def get_key_store(request: Request) -> KeyStore:
     return request.app.state.key_store
 
 
-def get_session_store(request: Request) -> InMemorySessionStore:
+def get_session_store(request: Request) -> SqliteSessionStore:
     return request.app.state.session_store
 
 
@@ -43,7 +43,7 @@ def get_embedding(request: Request) -> EmbeddingProvider:
 
 def get_session(
     session_id: str,
-    store: InMemorySessionStore = Depends(get_session_store),
+    store: SqliteSessionStore = Depends(get_session_store),
 ) -> SessionMeta:
     meta = store.get(session_id)
     if meta is None:
