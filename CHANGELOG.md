@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-09-18 · P2 收尾清理：文档日期修正 + 本地语料隔离 + 推送
+
+**描述**：P2 全分支最终审查修复轮（`92430e8`）落地后的收尾轮。全量复跑验证（pytest 280 / ruff / 前端 build 全绿）；P2 端到端验收复跑因 **DeepSeek 账户余额不足（HTTP 402）**被外部阻塞——非 LLM 依赖门禁（P2-3 会话/对话历史恢复 ×2、P2-2 配比纯函数、P2-4 Key 通路）与观察项（retry 路径）全 PASS，LLM 依赖门禁（P2-1 抽取 0/20、P2-4 判定 verification=null）被 402 击穿、P2-2/P2-5 正确归 dep 跳过，**无代码改动**；待充值后复跑恢复 15/15 证据。本轮仅仓库级修改（用户逐项确认）：
+- `docs/project-status.md`：头部「最近更新」由 2026-09-17 修正为 2026-09-18（§3 已含 09-18 验收结论，头日期滞后于正文）
+- `.gitignore`：追加 `resume-project-intro/`、`resume-source/`、`resume-updated.html`（P2 简历解析本地手工测试素材，未被任何代码/测试引用，不入库不删除）
+- 推送：本地 32 个 commit 推送至 `origin/master`（用户确认）
+
+**验证结果**：`uv run pytest tests -q` → 280 passed（16.33s）；`ruff check`/`format --check` 通过；`cd web && npm run build` 成功（287ms）；未新增第三方依赖。
+
+**项目结构更新**
+- 修改（文档/仓库配置）：`.gitignore`、`docs/project-status.md`、`CHANGELOG.md`（本轮无 `app/` 代码改动）
+- 未入库：`data/`（本地运行时数据）、根目录 3 项本地测试语料（已 gitignore）
+
 ## 2026-09-18 · P2 最终审查修复轮（BLOCKER：配置页搜索 Key 传不到搜索客户端 / MAJOR：API Key 明文落盘 / 口径修正）
 
 **描述**：针对 P2 全分支最终审查（1 blocker + 2 major + 若干 minor）执行修复。本轮**改动了 `app/` 代码**（前两轮只改脚本/文档），既有测试仅**新增用例**、未改任何既有断言语义。三处修复：① **BLOCKER**——`VerifyContext` 在 lifespan（`app/main.py`）构造时**一次性固化** `BochaClient(key_store.get_verify_key() or "")`，而 verify key 只在运行期经 `PUT /api/settings/verify-key` 写入内存 `KeyStore` → 客户端 `_api_key` 恒为空 → `search()` 恒抛 `BochaError("联网搜索 Key 未配置")` → 被 `verify()` 吞掉后**恒返回 `unconfirmed / 搜索无可用信源`、`sources` 恒空**（用户在配置页填的 Key 永远不生效）。② **MAJOR（安全）**——P2-3 换 `SqliteSaver` 后 `_api_key` 沦为普通 state channel，本地 `data/interview.db` 的 checkpoint/writes 内实测含 `_api_key` 与 `sk-` 明文（生产即用户真实 DeepSeek Key；`data/` 已 gitignore，未泄漏进版本库）。③ **MAJOR（证据强度）**——验收/文档对 P2-4 的口径修正（新增 Key 通路门禁项 + 全量复跑 + limitation 补齐）。另修 3 个 minor（前端类型 / API 路径下发 / 删除顺序）。

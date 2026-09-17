@@ -38,3 +38,8 @@ docker/es/plugins/
 
 # Execution ledger (process noise, not project assets)
 .superpowers/
+
+# Local manual test resumes (P2 parsing samples, not project assets)
+resume-project-intro/
+resume-source/
+resume-updated.html
