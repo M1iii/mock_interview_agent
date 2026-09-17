@@ -214,6 +214,9 @@ def p1_3(ctx, cfg) -> None:
             continue
         state = initial_state(scene="fulltime", question_count=5, kb_id=kb_id)
         state["_api_key"] = key
+        state["scores"] = [
+            {"topic": q["topic"]}
+        ]  # 口径 C：检索按题目主题召回（_build_search_query 读 scores）
         try:
             out = ask_question_node(state, llm, retrieval=ctx)
         except Exception as e:  # noqa: BLE001 - LLM 单题失败不中断
