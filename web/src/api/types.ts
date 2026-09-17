@@ -11,6 +11,9 @@ export interface SessionMeta {
   created_at: string
   message_count: number
   question_index: number
+  kb_id?: string
+  resume_id?: string
+  interview_type?: InterviewType
 }
 
 export interface CreateSessionRequest {
@@ -18,6 +21,8 @@ export interface CreateSessionRequest {
   question_count?: number
   skip_opening?: boolean
   kb_id?: string
+  resume_id?: string
+  interview_type?: InterviewType
 }
 
 export interface Citation {
@@ -52,6 +57,27 @@ export interface KnowledgeBase {
   dims: number
   created_at: string
   files: KbFile[]
+}
+
+export type InterviewType = 'technical' | 'behavioral' | 'comprehensive'
+export type ResumeStatus = 'processing' | 'ready' | 'failed'
+
+export interface Resume {
+  id: string
+  file_name: string
+  size: number
+  status: ResumeStatus
+  error: string | null
+  point_count: number | null
+  created_at: string
+}
+
+export interface Verification {
+  status: 'verified' | 'uncertain' | 'unconfirmed'
+  reason: string
+  claims: string[]
+  sources: { title: string; url: string; snippet: string }[]
+  skipped: boolean
 }
 
 export interface EmbeddingConfig {
@@ -106,6 +132,7 @@ export interface AssessPayload {
   comment: string
   score: number
   citations?: Citation[] // Tip 8：本题引用元数据，评估面板展示来源折叠
+  verification?: Verification | null
 }
 
 export type SSEEvent =

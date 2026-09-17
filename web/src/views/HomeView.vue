@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { createSession, deleteSession, listKnowledgeBases, listSessions } from '../api/client'
-import type { KnowledgeBase, Scene, SessionMeta, SessionStatus } from '../api/types'
+import { createSession, deleteSession, listKnowledgeBases, listResumes, listSessions } from '../api/client'
+import type { InterviewType, KnowledgeBase, Resume, Scene, SessionMeta, SessionStatus } from '../api/types'
 
 const router = useRouter()
 
@@ -28,11 +28,14 @@ const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
 const kbs = ref<KnowledgeBase[]>([])
+const resumes = ref<Resume[]>([])
 const form = reactive({
   scene: 'intern' as Scene,
   question_count: 10,
   skip_opening: false,
   kb_id: '',
+  interview_type: 'technical' as InterviewType,
+  resume_id: '',
 })
 
 async function load() {
@@ -44,12 +47,21 @@ async function load() {
   }
 }
 
+async function loadResumes() {
+  resumes.value = await listResumes()
+}
+
 onMounted(async () => {
   await load()
   try {
     kbs.value = await listKnowledgeBases()
   } catch {
     kbs.value = []
+  }
+  try {
+    resumes.value = await listResumes()
+  } catch {
+    resumes.value = []
   }
 })
 
@@ -59,6 +71,8 @@ function openCreate() {
   form.question_count = 10
   form.skip_opening = false
   form.kb_id = ''
+  form.interview_type = 'technical'
+  form.resume_id = ''
   showCreate.value = true
 }
 
@@ -71,6 +85,8 @@ async function handleCreate() {
       question_count: form.question_count,
       skip_opening: form.skip_opening,
       kb_id: form.kb_id || undefined,
+      interview_type: form.interview_type,
+      resume_id: form.resume_id || undefined,
     })
     showCreate.value = false
     router.push(`/chat/${meta.id}`)
@@ -123,6 +139,7 @@ function progressText(s: SessionMeta): string {
       </div>
       <div class="header-actions">
         <button class="btn" @click="router.push('/knowledge')">知识库</button>
+        <button class="btn" @click="router.push('/resumes')">简历</button>
         <button class="btn" @click="router.push('/settings')">环境配置</button>
         <button class="btn btn-primary" @click="openCreate">新建面试</button>
       </div>
@@ -230,6 +247,32 @@ function progressText(s: SessionMeta): string {
             </option>
           </select>
           <p class="field-hint">关联后出题将基于知识库内容，并标注引用来源</p>
+        </div>
+
+        <div class="field">
+          <span class="label">面试类型</span>
+          <select v-model="form.interview_type" class="input">
+            <option value="technical">技术面</option>
+            <option value="behavioral">行为面</option>
+            <option value="comprehensive">综合面</option>
+          </select>
+          <p class="field-hint">技术面偏原理与系统设计，行为面偏经历与软技能，综合面两者兼有</p>
+        </div>
+
+        <div class="field">
+          <label class="label" for="resume-select">关联简历（可选）</label>
+          <select id="resume-select" v-model="form.resume_id" class="input">
+            <option value="">不关联（通用出题）</option>
+            <option
+              v-for="r in resumes"
+              :key="r.id"
+              :value="r.id"
+              :disabled="r.status !== 'ready'"
+            >
+              {{ r.file_name }}{{ r.status === 'ready' ? '' : '（解析中/失败）' }}
+            </option>
+          </select>
+          <p class="field-hint">关联后出题将结合简历考点，混合知识库内容</p>
         </div>
 
         <div class="field">

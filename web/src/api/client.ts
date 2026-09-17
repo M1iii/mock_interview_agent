@@ -7,6 +7,7 @@ import type {
   KnowledgeBase,
   MessagesResponse,
   ReportInfo,
+  Resume,
   SSEEvent,
   SessionMeta,
 } from './types'
@@ -69,6 +70,18 @@ export async function setApiKey(apiKey: string): Promise<KeyInfo> {
   })
 }
 
+export async function getVerifyKey(): Promise<KeyInfo> {
+  return request<KeyInfo>('/api/settings/verify-key')
+}
+
+export async function setVerifyKey(verifyKey: string): Promise<KeyInfo> {
+  return request<KeyInfo>('/api/settings/verify-key', {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ verify_key: verifyKey }),
+  })
+}
+
 export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
   return request<KnowledgeBase[]>('/api/knowledge')
 }
@@ -98,6 +111,24 @@ export async function retryKnowledgeFile(kbId: string, recordId: string): Promis
 
 export async function deleteKnowledgeBase(kbId: string): Promise<{ deleted: number }> {
   return request<{ deleted: number }>(`/api/knowledge/${kbId}`, { method: 'DELETE' })
+}
+
+export async function listResumes(): Promise<Resume[]> {
+  return request<Resume[]>('/api/resumes')
+}
+
+export async function uploadResume(file: File): Promise<{ resume: Resume }> {
+  const form = new FormData()
+  form.append('file', file)
+  return request<{ resume: Resume }>('/api/resumes', { method: 'POST', body: form })
+}
+
+export async function deleteResume(id: string): Promise<void> {
+  await request(`/api/resumes/${id}`, { method: 'DELETE' })
+}
+
+export async function retryResume(id: string): Promise<{ resume: Resume }> {
+  return request<{ resume: Resume }>(`/api/resumes/${id}/retry`, { method: 'POST' })
 }
 
 export async function getEmbeddingConfig(): Promise<EmbeddingConfig> {
