@@ -17,6 +17,7 @@ from app.interview.prompts.resume_question import RESUME_QUESTION
 from app.interview.ratio import is_resume_question
 from app.interview.state import InterviewState, Score
 from app.llm.client import DeepSeekClient
+from app.logging import logger
 from app.retrieval.retrieve import DECLINE, FALLBACK, RetrievalResult, retrieve
 
 # 引用数量上限（Tip 7 决策 3）：题干过长会稀释核心问题
@@ -202,8 +203,8 @@ def ask_question_node(
     return updates
 
 
-def evaluate_node(state: InterviewState, llm: DeepSeekClient) -> dict:
-    """评估：LLM 打分 + 判断是否追问。"""
+def evaluate_node(state: InterviewState, llm: DeepSeekClient, verify_ctx=None) -> dict:
+    """评估：LLM 打分 + 追问判断 + （P2）事实性陈述联网核验。"""
     scene = state.get("scene", "fulltime")
     answer = _extract_answer(state)
     prompt = EVALUATE.format(
@@ -235,6 +236,13 @@ def evaluate_node(state: InterviewState, llm: DeepSeekClient) -> dict:
     if state.get("_citations"):
         # Tip 8：原样透传出题节点的引用元数据（不重新检索）
         score_entry["citations"] = state["_citations"]
+    verification = None
+    if verify_ctx is not None:
+        try:
+            verification = verify_ctx.verify(state["_api_key"], answer)
+        except Exception as e:  # noqa: BLE001 - 核验异常不阻断评估
+            logger.warning("evaluate verify skipped: {err}", err=repr(e))
+    score_entry["verification"] = verification.to_dict() if verification else None
     new_scores = [*state.get("scores", []), score_entry]
     # 不需要追问时推进题号（进入下一题或进 report）
     updates = {

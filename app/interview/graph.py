@@ -56,7 +56,9 @@ def route_after_evaluate(state: InterviewState) -> str:
 # --- 图构建 ---
 
 
-def build_graph(llm: DeepSeekClient, retrieval=None, resume_store=None, cfg=None) -> StateGraph:
+def build_graph(
+    llm: DeepSeekClient, retrieval=None, resume_store=None, cfg=None, verify_ctx=None
+) -> StateGraph:
     """构建面试编排图（未编译，供调用方 compile）。
 
     暂停点（→ END）：ask_question / follow_up 生成内容后暂停，等用户回答后
@@ -65,6 +67,7 @@ def build_graph(llm: DeepSeekClient, retrieval=None, resume_store=None, cfg=None
     retrieval: RetrievalContext——注入出题节点做知识库检索（可 None）。
     resume_store: ResumeStore——双来源出题的简历考点来源（可 None）。
     cfg: 应用配置——面试类型配比来源（可 None，缺省回落 P1 行为）。
+    verify_ctx: VerifyContext——评估节点事实性陈述联网核验注入（可 None，不核验）。
     """
     graph = StateGraph(InterviewState)
     graph.add_node("opening", partial(opening_node, llm=llm))
@@ -74,7 +77,7 @@ def build_graph(llm: DeepSeekClient, retrieval=None, resume_store=None, cfg=None
             ask_question_node, llm=llm, retrieval=retrieval, resume_store=resume_store, cfg=cfg
         ),
     )
-    graph.add_node("evaluate", partial(evaluate_node, llm=llm))
+    graph.add_node("evaluate", partial(evaluate_node, llm=llm, verify_ctx=verify_ctx))
     graph.add_node("follow_up", partial(follow_up_node, llm=llm))
     graph.add_node("report", partial(report_node, llm=llm))
 
@@ -105,7 +108,12 @@ def build_graph(llm: DeepSeekClient, retrieval=None, resume_store=None, cfg=None
 
 
 def compile_graph(
-    llm: DeepSeekClient, checkpointer=None, retrieval=None, resume_store=None, cfg=None
+    llm: DeepSeekClient,
+    checkpointer=None,
+    retrieval=None,
+    resume_store=None,
+    cfg=None,
+    verify_ctx=None,
 ):
     """编译面试编排图，返回可执行图。
 
@@ -113,5 +121,8 @@ def compile_graph(
     retrieval: RetrievalContext，出题节点知识库检索注入（可 None）。
     resume_store: ResumeStore，双来源出题注入（可 None）。
     cfg: 应用配置，面试类型配比注入（可 None）。
+    verify_ctx: VerifyContext，评估节点联网核验注入（可 None，不核验）。
     """
-    return build_graph(llm, retrieval, resume_store, cfg).compile(checkpointer=checkpointer)
+    return build_graph(llm, retrieval, resume_store, cfg, verify_ctx).compile(
+        checkpointer=checkpointer
+    )

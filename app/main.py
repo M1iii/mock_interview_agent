@@ -25,6 +25,7 @@ from app.store.checkpointer import create_checkpointer
 from app.store.knowledge import KnowledgeStore
 from app.store.resume import ResumeStore
 from app.store.sessions import SqliteSessionStore
+from app.verify.verify import VerifyContext
 
 WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
 
@@ -52,12 +53,14 @@ async def lifespan(app: FastAPI):
         cfg=cfg, qdrant=app.state.qdrant, es=app.state.es, embedding=app.state.embedding
     )
     app.state.retrieval = retrieval_ctx
+    verify_ctx = VerifyContext(app.state.llm_client, cfg, app.state.key_store)
     app.state.compiled_graph = compile_graph(
         app.state.llm_client,
         app.state.checkpointer,
         retrieval=retrieval_ctx,
         resume_store=app.state.resume_store,
         cfg=cfg,
+        verify_ctx=verify_ctx,
     )
 
     yield

@@ -76,6 +76,31 @@ async def get_api_key(
     return KeyResponse(masked_key=key_store.get_global_masked(), is_set=is_set)
 
 
+class VerifyKeyRequest(BaseModel):
+    verify_key: str = Field(default="", max_length=256)
+
+
+@router.put("/verify-key", response_model=KeyResponse)
+async def set_verify_key(
+    req: VerifyKeyRequest,
+    key_store: KeyStore = Depends(get_key_store),
+) -> KeyResponse:
+    """设置联网搜索 Key（博查，可选填；传空串清除）。"""
+    key_store.set_verify_key(req.verify_key.strip())
+    return KeyResponse(
+        masked_key=key_store.get_verify_masked(), is_set=key_store.get_verify_key() is not None
+    )
+
+
+@router.get("/verify-key", response_model=KeyResponse)
+async def get_verify_key(
+    key_store: KeyStore = Depends(get_key_store),
+) -> KeyResponse:
+    """获取联网搜索 Key 掩码（不返回明文）。"""
+    key = key_store.get_verify_key()
+    return KeyResponse(masked_key=key_store.get_verify_masked(), is_set=key is not None)
+
+
 @router.get("/embedding", response_model=EmbeddingConfigResponse)
 async def get_embedding_config(
     embedding: OpenAICompatEmbedding = Depends(get_embedding),

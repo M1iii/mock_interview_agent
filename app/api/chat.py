@@ -418,6 +418,7 @@ async def chat(
                                 "comment": last.get("comment", ""),
                                 "score": last.get("score", 0),
                                 "citations": last.get("citations", []),
+                                "verification": last.get("verification"),
                             },
                         )
 

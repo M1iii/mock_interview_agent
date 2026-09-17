@@ -23,6 +23,7 @@ class KeyStore:
     def __init__(self) -> None:
         self._global_key: str | None = None
         self._keys: dict[str, str] = {}
+        self._verify_key: str | None = None  # P2：联网搜索 Key（博查，可选填）
 
     # --- 全局 Key ---
 
@@ -58,3 +59,17 @@ class KeyStore:
 
     def delete(self, session_id: str) -> None:
         self._keys.pop(session_id, None)
+
+    # --- 联网搜索 Key（P2-4，可选填） ---
+
+    def set_verify_key(self, api_key: str) -> None:
+        if not api_key or not api_key.strip():
+            self._verify_key = None
+            return
+        self._verify_key = api_key.strip()
+
+    def get_verify_key(self) -> str | None:
+        return self._verify_key
+
+    def get_verify_masked(self) -> str:
+        return mask_secret(self._verify_key) if self._verify_key else ""
