@@ -49,7 +49,8 @@ class KeyStore:
         return key
 
     def get(self, session_id: str) -> str | None:
-        return self._keys.get(session_id)
+        """会话快照优先；重启后快照丢失时回退当前全局 Key（P2-3 恢复续聊）。"""
+        return self._keys.get(session_id) or self._global_key
 
     def masked(self, session_id: str) -> str:
         key = self.get(session_id)

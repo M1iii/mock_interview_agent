@@ -43,3 +43,11 @@ def test_store_masked_and_delete():
     assert store.masked("missing") == ""
     store.delete("s1")
     assert store.get("s1") is None
+
+
+def test_get_falls_back_to_global_key():
+    store = KeyStore()
+    store.set_global_key("sk-abc123")
+    assert store.get("unknown-session") == "sk-abc123"
+    store.set_global_key("sk-new456")
+    assert store.get("unknown-session") == "sk-new456"
