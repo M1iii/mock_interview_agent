@@ -189,7 +189,60 @@ def p1_2(ctx) -> None:
 
 
 def p1_3(ctx, cfg) -> None:
-    raise NotImplementedError
+    from app.interview.nodes import ask_question_node
+    from app.interview.state import initial_state
+    from app.llm.client import DeepSeekClient
+    from app.llm.keys import KeyStore
+
+    llm = DeepSeekClient(cfg)
+    # KeyStore.__init__ 不接收 cfg 且全局 Key 仅经 set_global_key 写入（运行时由设置接口注入），
+    # 独立脚本需从 cfg（LLM_API_KEY/.env）显式设置后再读取。
+    key_store = KeyStore()
+    key_store.set_global_key(cfg.llm.api_key)
+    key = key_store.get_global_key()
+    judge_prompt = (
+        "你是引用准确性验收裁判。判断下面的「引用片段」是否支撑「面试题目」，"
+        "即引用内容与题目讨论同一知识点、能作为答题依据。\n"
+        "题目：{question}\n引用：[{n}] {text}\n只输出 true 或 false。"
+    )
+
+    judged = total_cites = true_cites = 0
+    details = []
+    for q in QUESTIONS:
+        gid = _GOLD.get(q["id"])
+        if gid is None:
+            continue
+        state = initial_state(scene="fulltime", question_count=5, kb_id=kb_id)
+        state["_api_key"] = key
+        try:
+            out = ask_question_node(state, llm, retrieval=ctx)
+        except Exception as e:  # noqa: BLE001 - LLM 单题失败不中断
+            details.append(f"{q['id']}:ask-error {repr(e)[:80]}")
+            continue
+        if out.get("_citations") is None or len(out["_citations"]) == 0:
+            details.append(f"{q['id']}:no-citations")
+            continue
+        question = out["current_question"]
+        for n, c in enumerate(out["_citations"], start=1):
+            prompt = judge_prompt.format(question=question, n=n, text=c["text"][:200])
+            try:
+                raw, _ = llm.complete_sync(api_key=key, prompt=prompt)
+                verdict = raw.strip().lower()
+                is_true = verdict.startswith("true")
+            except Exception as e:  # noqa: BLE001
+                is_true = False
+                details.append(f"{q['id']}:judge-error {repr(e)[:80]}")
+            total_cites += 1
+            true_cites += 1 if is_true else 0
+        judged += 1
+
+    rate = true_cites / total_cites if total_cites else 0.0
+    report.add(
+        "P1-3 引用准确率（normal 级）",
+        rate >= 0.90 and judged >= 40,
+        f"judged={judged}/50 cites={true_cites}/{total_cites} = {rate:.0%} | "
+        + ("; ".join(details[:5]) if details else "-"),
+    )
 
 
 def p1_4(ctx) -> None:
