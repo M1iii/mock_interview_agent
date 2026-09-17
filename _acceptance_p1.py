@@ -43,6 +43,32 @@ class Report:
 report = Report()
 kb_id = f"kb-acceptance-{time.strftime('%Y%m%d%H%M%S')}"
 
+_GOLD: dict[str, str] = {}  # qid -> gold_parent_id
+_TIMINGS: list[float] = []  # P1-6 采样
+
+
+def _locate_gold(es, q: dict) -> str | None:
+    client = es.get_client()
+    resp = client.search(
+        index=es.index,
+        query={
+            "bool": {
+                "must": [
+                    # match_phrase 因索引端 ik_max_word 会插入重叠子词（如 不存在→不存/存在）
+                    # 破坏短语相邻位置，50 条仅命中 11 条；gold_snippet 全文逐字存在于唯一
+                    # parent 块内，改用 match（整段句子）定位语义不变（已验证 50/50 且
+                    # 返回的 parent 均逐字包含该 snippet）。
+                    {"match": {"text": q["gold_snippet"]}},
+                    {"term": {"kb_id": kb_id}},
+                ]
+            }
+        },
+        size=1,
+        _source=["parent_id"],
+    )
+    hits = resp.get("hits", {}).get("hits", [])
+    return hits[0]["_source"]["parent_id"] if hits else None
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -133,7 +159,33 @@ def p1_1(store, qdrant, es, embedding, cfg) -> None:
 
 
 def p1_2(ctx) -> None:
-    raise NotImplementedError
+    es = ctx.es
+    locate_ok = 0
+    for q in QUESTIONS:
+        gid = _locate_gold(es, q)
+        if gid:
+            _GOLD[q["id"]] = gid
+            locate_ok += 1
+    report.add("P1-2 gold 定位率", locate_ok == len(QUESTIONS), f"{locate_ok}/{len(QUESTIONS)}")
+
+    hit = 0
+    miss_list = []
+    for q in QUESTIONS:
+        gid = _GOLD.get(q["id"])
+        if gid is None:
+            continue
+        r = retrieve(q["query"], kb_id, ctx.cfg, ctx.qdrant, ctx.es, ctx.embedding)
+        _TIMINGS.append(r.total_ms)
+        ok = any(c.parent_id == gid for c in r.citations)
+        hit += ok
+        if not ok:
+            miss_list.append(f"{q['id']}({q['topic']})")
+    rate = hit / len(QUESTIONS)
+    report.add(
+        "P1-2 Top-K=5 召回命中率",
+        rate >= 0.80,
+        f"{hit}/{len(QUESTIONS)} = {rate:.0%} | miss: {', '.join(miss_list) if miss_list else '-'}",
+    )
 
 
 def p1_3(ctx, cfg) -> None:
@@ -149,7 +201,16 @@ def p1_5(store, qdrant, es, cfg) -> None:
 
 
 def p1_6() -> None:
-    raise NotImplementedError
+    if len(_TIMINGS) < len(QUESTIONS):
+        report.add("P1-6 检索 P95", False, "无采样数据（需先跑 p1-2）")
+        return
+    times = sorted(_TIMINGS)
+    p95 = times[int(len(times) * 0.95) - 1]
+    report.add(
+        "P1-6 单次检索 P95",
+        p95 <= 2000,
+        f"P95={p95:.0f}ms P50={statistics.median(times):.0f}ms max={max(times):.0f}ms",
+    )
 
 
 def p1_7(store, qdrant, es, cfg) -> None:
