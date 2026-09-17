@@ -1,5 +1,48 @@
 # CHANGELOG
 
+## 2026-09-18 · P2 收尾：skip 分支缺陷修复验收确认 + 文档同步（门禁 14/14 PASS）
+
+**描述**：第 2 轮验收首次暴露的 app 侧缺陷「跳过非末题后下一题生成失败」**已修复**（提交 `8e2933a`），本轮做三件事且**只改文档、未改任何 `app/` 代码与既有测试断言**：① **全量复跑验收**（`uv run python _acceptance_p2.py`，不加 `--only`）→ **门禁 passed=14 failed=0（退出码 0）｜观察项 total=1 failed=0｜依赖缺失 dep=0**——原先唯一的门禁 FAIL「P2-5 skip 推进（无 error 事件）」**已转为 PASS**；② 把 CHANGELOG / `docs/project-status.md` 中该缺陷「验收暴露、未修、记 FAIL 待裁决」的口径**同步改为「验收暴露 → 已修复」**（保留下方第 2 轮条目原有运行事实与根因链，仅补注修复结论，不篡改历史）；③ 按本轮实测值校准 §3/§4 与 limitation 行（P2-1 100%、P2-2 注入链路一致性 36/45=80%、retry 观察项 31.3s）。
+
+**缺陷与修复（`8e2933a`：`fix(chat): pass callback list in skip branch to fix next-question generation after skipping`）**
+- **缺陷**：跳过**非末题**后，下一题出题失败，SSE 返回 `error{"message": "服务异常，请重试"}`，题号不推进（会话卡死；末题跳过走报告分支不受影响）
+- **根因**：`app/api/chat.py` skip 分支把**裸 `handler`**（而非 `[handler]`）传给 `ask_question_node` → `app/interview/nodes/__init__.py` `complete_sync(callbacks=handler)` → `app/llm/client.py` `llm.stream(..., config={"callbacks": handler})` → `langchain_core` `ensure_config` 对 `COPIABLE_KEYS`（含 `"callbacks"`）执行 `v.copy()` → `TokenStreamHandler` 无 `copy()` → `AttributeError` → 被 `client.py` 包装为 `LLMError` → SSE error
+- **修复方式**：改传 `[handler]`（list，与首次出题 / 提交回答的图路径一致，langchain 归一化为可 copy 的 `CallbackManager`），1 行改动
+- **回归用例**：`tests/test_chat_actions.py::test_skip_non_last_question_passes_callback_list`——fake LLM 在 `callbacks` 非 list 时直接抛 `TypeError`，跳过第 1 题后断言 `event: error` 不出现 + `event: done` 出现 + 第 2 题题干存在 + `callbacks` 为 list（修复前必然失败）
+- **为何此前未覆盖**：`tests/test_stream_integration.py` 的 skip 用例用 `FakeStreamLLM`（`complete_sync` 忽略 callbacks，不触发 `ensure_config`）；`_acceptance_p1.py` 无 skip 路径；前两轮 P2 验收的 skip 循环静默 break 后由 `POST /finish` 兜底出报告，断言仍 PASS
+
+**本轮验收实测（标准 / 实测 / 结论，全量 `uv run python _acceptance_p2.py`）**
+- 汇总：**门禁 14 项 passed=14 failed=0（退出码 0）**；观察项 1 项 PASS；依赖缺失 dep=0
+- P2-1 解析成功率（标准 ≥90%）：实测 **20/20 = 100%** → PASS
+- P2-1 字段命中率 name+skills（标准 ≥85%）：实测 **20/20 = 100%**（miss 空）→ PASS
+- P2-1 考点清单落表一致（`point_count` = rows ≥10）：mismatch 空 → PASS
+- 观察项｜retry 路径（R6）：本次无 failed 简历 → 构造探针 `resume_01.md`（rid=`r-2798040d`），原文件保留=True、http=200、`resp_status=processing`、`final_status=ready`、耗时 31.3s → PASS
+- P2-2 考点清单 ≥10：ready=20 scope=run，below 空 → PASS
+- P2-2 配比纯函数复算：cfg=`{technical 0.3, behavioral 0.8, comprehensive 0.5}`，`resume_question_indices(10, r)` = `[1,4,7]` / `[1,2,3,4,6,7,8,9]` / `[1,3,5,7,9]` → PASS
+- P2-2 简历来源题干含考点关键词（标准 ≥80%，口径=注入链路一致性）：关键词覆盖 **36/45 = 80%**、题干命中 3/3 = 100%（明细 `resume_01:10/15; resume_02:14/15; resume_03:12/15`）→ PASS（**贴近阈值**；三轮分别为 89% / 91% / 80%，波动源为抽取结果（LLM 非确定性）决定题干回显的考点文本，与 gold 关键词的字面重合数随之变化——属 F1/F2 limitation 已记录的口径问题，非应用缺陷）
+- P2-3 会话记录恢复（同库重建）：`sid=p2-3-0816e705 status=ongoing` → PASS
+- P2-3 对话历史恢复（checkpointer）：`msgs=1 qidx=3 resume=r-restore-sample` → PASS
+- P2-4 事实核验（已配置 Key + 搜索补丁）：`status=verified`、claims 3、sources 6 → PASS
+- P2-4 未配置 Key 跳过核验（同一 answer 对照）：`is_set=False` + `verification=null` → PASS
+- P2-5 第 1 题核验触发（VerifyContext 全链路）：`kb=None`（检索服务未监听 → 静默降级）、`status=verified`、claims 3 → PASS
+- **P2-5 skip 推进（无 error 事件）：`skip 全程无 error 事件` → PASS（第 2 轮为 FAIL，修复后转 PASS）**
+- P2-5 端到端链路（报告正文 + 结构化摘要）：收口路径为 **`GET /report` http=200**（末题 skip 已自动出报告并置会话 finished，**不再需要 `POST /finish` 兜底**——这本身即 skip 推进链路打通的正向证据）、`report_chars=1848`、`summary=dict`、`total_score=13`(int, 0–100)、四维齐 `{"技术深度":10,"沟通表达":30,"问题解决":0,"项目经验":10}` → PASS
+- P2-5 报告导出（`GET /report`）：`export_http=200` → PASS
+- 其他：本轮运行无新增门禁 FAIL（故未重跑第二次），亦无脚本/环境问题需修（`_acceptance_p2.py` 未改动）
+
+**回归（2026-09-18）**
+- `uv run pytest tests -q` → **267 passed**（15.98s，1 条三方 `DeprecationWarning`）——较修复前 266 例 +1 即上述回归用例
+- `uv run ruff check app/ tests/` → **All checks passed!**
+- `cd web; npm run build` → 构建成功（built in 312ms）
+
+**环境偏差（如实记录，未变化）**
+- 本轮开始时 Qdrant(6333)/ES(9200)/TEI(8081) **仍未监听**（`Test-NetConnection` 三项均 False）→ `uv run python _acceptance_p1.py` **复跑仍无法执行**；P1 侧回归证据维持 pytest 全量 + ruff + 前端 build，**P1-3（28%，标准 ≥90%）与 P1-4 decline 子项搁置记录维持不变，标准未调整**
+- P2 五项不依赖真实检索服务（P2-5 的 `kb` 在服务缺失时显式省略并静默降级，核验链路仍真实走通）
+
+**项目结构更新**
+- 修改：`CHANGELOG.md`、`docs/project-status.md`
+- 未新增文件；未改 `app/` 与既有 `tests/*.py`；`_acceptance_p2.py` 本轮无改动
+
 ## 2026-09-17 · P2 验收审查修复（第 2 轮：脚本健壮性 / 依赖缺失归类 / retry 观察项）
 
 **描述**：针对 Task 11 第 2 轮复审（approve + 5 minor + 1 建议）执行修复，**只改验收脚本与文档，未改任何 `app/` 代码**。① **minor-1 依赖缺失归类**：`_scoped_ready` 为空（无本次上传且库内无语料 stem 的 ready 简历，即未先跑 p2-1）时不再计为 failed，改记 `kind="dep"`（`usage-error`），涉及 P2-2 考点清单 / P2-2 抽样 / P2-5 三处；SUMMARY 分列「门禁项 / 观察项 / 依赖缺失」，退出码只看门禁项。② **minor-2 skip error 记录**：P2-5 skip 循环命中 `error` 事件时先 `report.add` 该 error 内容（门禁项）再 break，不再静默吞掉——**首跑即暴露一处 app 侧既有缺陷**（见下「新暴露缺陷」）。③ **minor-3 断言健壮性**：p2_4/p2_5 内 5 处 `assert`（verify-key 置位/清空/GET 校验）改为「记录 FAIL 项 + 提前 return」，并在 `main` 对每个检查项兜底 `try/except`，保证全量运行总能输出 SUMMARY 与退出码（不再因 AssertionError 中断而丢后续 P2-x 项与摘要）。④ **minor-4 摘要可读性**：`_check_report_summary` 的 detail 追加原始 `summary`（截断 400 字符），断言口径不变。⑤ **minor-5 指代消歧**：CHANGELOG / project-status 中「随本提交…纳入版本控制」补 commit hash `20216a5`。⑥ **复审建议（非门禁）**：新增 `kind="obs"` 观察项覆盖 `POST /api/resumes/{id}/retry`（R6「失败保留原文件可重试」）；本次运行无 failed 简历，故先构造 failed 探针再调用 retry，实测 HTTP 200、`resp_status=processing`、`final_status=ready`（30.5s）、原文件保留=True。
@@ -17,15 +60,15 @@
   - P2-3 会话记录恢复 + 对话历史恢复（同库重建）PASS
   - P2-4 已配置 Key + 搜索补丁：`status=verified`、claims 3 / sources 6；未配置 Key（同一 answer 对照）：`is_set=False` + `verification=null` PASS
   - P2-5 第 1 题核验触发（VerifyContext 全链路）：`status=verified`、claims 3 PASS；报告正文 1728 字符含「面试报告」+ `_report_summary` 5 键齐全、`total_score=15`、四维键齐全（`raw_summary` 原文已随 detail 打印）PASS；`GET /report` 200 PASS；**报告经 `POST /finish` 兜底生成**（skip 推进失败导致会话未结束）
-  - **唯一门禁 FAIL：`P2-5 skip 推进（无 error 事件）` → skip 返回 `error`：`{"message": "服务异常，请重试"}`**（详见下节，属 app 侧既有缺陷，非本轮引入）
+  - **唯一门禁 FAIL：`P2-5 skip 推进（无 error 事件）` → skip 返回 `error`：`{"message": "服务异常，请重试"}`**（详见下节，属 app 侧既有缺陷，非本轮引入）——**该 FAIL 已于提交 `8e2933a` 修复，2026-09-18 全量复跑该门禁项转为 PASS（passed=14 / failed=0），见本文件顶部条目**
 - 兼容性验证（依赖满足时逻辑不变）：空库下隔离跑 `--only p2-2 p2-5` → `gate_failed=0 / dep=3 / obs=0`（依赖缺失与真实 FAIL 已清晰分离，退出码 0）
 - 回归：`uv run pytest tests -q` **266 passed**（15.92s，1 条三方 DeprecationWarning）；`uv run ruff check app/ tests/` 与 `uv run ruff check _acceptance_p2.py` 全通过
 
-**新暴露缺陷（非本轮引入，待用户裁决）**
+**新暴露缺陷（非本轮引入 → 已于 `8e2933a` 修复）**
 - **现象**：跳过非末题后，下一题出题失败，SSE 返回 `error{"message": "服务异常，请重试"}`（题号不推进）；末题跳过（走报告分支）不受影响
 - **根因链**（两轮运行（`3defcc9` 前后各一次）均 100% 复现）：`app/api/chat.py` skip 分支把**裸 `handler`**（而非 `[handler]`）传给 `ask_question_node` → `app/interview/nodes/__init__.py:190` `complete_sync(callbacks=handler)` → `app/llm/client.py:100` `llm.stream(..., config={"callbacks": handler})` → `langchain_core/runnables/config.py:287` `ensure_config` 对 `COPIABLE_KEYS`（含 `"callbacks"`）执行 `v.copy()` → `AttributeError: 'TokenStreamHandler' object has no attribute 'copy'` → 被 `client.py:113-115` 包装为 `LLMError` → SSE error。对照：首次出题 / 提交回答走图路径传的是 `[handler]`（list，langchain 归一化为 `CallbackManager`，可 copy）→ 正常
 - **为何此前未被发现**：`tests/test_stream_integration.py` 的 skip 用例用 `FakeStreamLLM`（`complete_sync` 忽略 callbacks，不触发 `ensure_config`）；`_acceptance_p1.py` 未覆盖 skip；两轮 P2 验收的 skip 循环静默 break 后由 `POST /finish` 兜底出报告，断言仍 PASS（正是 minor-2 要堵的「题目推进失败但报告断言仍 PASS」场景）
-- **建议修复（需授权，本轮禁改 `app/`）**：`chat.py` 改传 `[handler]`；或给 `TokenStreamHandler` 补 `copy()`/`__copy__`；并补一条走真实 `DeepSeekClient.complete_sync` 的 skip 回归测试
+- **修复实施（`8e2933a`，2026-09-18）**：采纳建议方案一——`app/api/chat.py` skip 分支改传 `[handler]`（1 行改动，与图路径一致）；新增回归用例 `tests/test_chat_actions.py::test_skip_non_last_question_passes_callback_list`；修复后 `pytest 267 passed`，全量验收该门禁项 FAIL → PASS（门禁 14/14、退出码 0），详见本文件顶部条目
 
 **项目结构更新**
 - 修改：`_acceptance_p2.py`、`CHANGELOG.md`、`docs/project-status.md`
