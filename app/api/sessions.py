@@ -133,13 +133,18 @@ async def delete_session(
     store: InMemorySessionStore = Depends(get_session_store),
     key_store: KeyStore = Depends(get_key_store),
 ) -> dict[str, str]:
-    """删除会话：SessionStore + KeyStore + checkpointer 状态三处同步物理删（N-8）。"""
+    """删除会话：checkpointer 状态 + SessionStore + KeyStore 三处同步物理删（N-8）。
+
+    顺序（最终审查修复轮）：**先删 checkpointer 状态，再删会话行/Key**。
+    原顺序会在 `delete_thread` 抛错时留下「会话行已删 → 重试 404」的不可重试不一致态；
+    现在无论哪一步失败，都可整体重试（`delete_thread` 幂等），保持「三处全删或全不删」。
+    """
     meta = store.get(session_id)
     if meta is None:
         raise HTTPException(status_code=404, detail="会话不存在")
+    await asyncio.to_thread(delete_thread, request.app.state.checkpointer, session_id)
     store.delete(session_id)
     key_store.delete(session_id)
-    await asyncio.to_thread(delete_thread, request.app.state.checkpointer, session_id)
     return {"status": "deleted", "id": session_id}
 
 

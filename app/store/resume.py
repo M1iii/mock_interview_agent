@@ -31,6 +31,7 @@ class Resume:
     created_at: datetime = None  # type: ignore[assignment]
 
     def to_dict(self) -> dict:
+        """内部用途：含 `path`（原文件相对路径）——API 层请用 to_public_dict()。"""
         return {
             "id": self.id,
             "file_name": self.file_name,
@@ -41,6 +42,12 @@ class Resume:
             "point_count": self.point_count,
             "created_at": self.created_at.isoformat() if self.created_at else "",
         }
+
+    def to_public_dict(self) -> dict:
+        """对外响应（API）：不下发服务端本地存储路径（前端未使用，避免泄露路径结构）。"""
+        data = self.to_dict()
+        data.pop("path", None)
+        return data
 
 
 @dataclass

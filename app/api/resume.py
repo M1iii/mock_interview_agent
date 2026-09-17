@@ -77,7 +77,7 @@ async def upload_resume(
     logger.info(
         "resume uploaded: {name} size={size} → processing", name=record.file_name, size=record.size
     )
-    return {"resume": record.to_dict()}
+    return {"resume": record.to_public_dict()}
 
 
 @router.get("")
@@ -85,7 +85,7 @@ async def list_resumes(
     store: ResumeStore = Depends(get_resume_store),
 ) -> list[dict]:
     """列出全部简历（含状态，按创建时间倒序）。"""
-    return [r.to_dict() for r in store.list_resumes()]
+    return [r.to_public_dict() for r in store.list_resumes()]
 
 
 @router.post("/{resume_id}/retry")
@@ -110,7 +110,7 @@ async def retry_resume(
         key_store.get_global_key(),
         request.app.state.config,
     )
-    return {"resume": store.get_resume(resume_id).to_dict()}
+    return {"resume": store.get_resume(resume_id).to_public_dict()}
 
 
 @router.delete("/{resume_id}")

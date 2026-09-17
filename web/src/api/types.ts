@@ -145,6 +145,7 @@ export type SSEEvent =
       comment: string
       score: number
       citations?: Citation[]
+      verification?: Verification | null // P2-4：本题事实性核验结论（ChatView 评估面板展示）
     }
   | { event: 'citations'; citations: Citation[] }
   | { event: 'error'; message: string }

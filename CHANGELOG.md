@@ -1,5 +1,67 @@
 # CHANGELOG
 
+## 2026-09-18 · P2 最终审查修复轮（BLOCKER：配置页搜索 Key 传不到搜索客户端 / MAJOR：API Key 明文落盘 / 口径修正）
+
+**描述**：针对 P2 全分支最终审查（1 blocker + 2 major + 若干 minor）执行修复。本轮**改动了 `app/` 代码**（前两轮只改脚本/文档），既有测试仅**新增用例**、未改任何既有断言语义。三处修复：① **BLOCKER**——`VerifyContext` 在 lifespan（`app/main.py`）构造时**一次性固化** `BochaClient(key_store.get_verify_key() or "")`，而 verify key 只在运行期经 `PUT /api/settings/verify-key` 写入内存 `KeyStore` → 客户端 `_api_key` 恒为空 → `search()` 恒抛 `BochaError("联网搜索 Key 未配置")` → 被 `verify()` 吞掉后**恒返回 `unconfirmed / 搜索无可用信源`、`sources` 恒空**（用户在配置页填的 Key 永远不生效）。② **MAJOR（安全）**——P2-3 换 `SqliteSaver` 后 `_api_key` 沦为普通 state channel，本地 `data/interview.db` 的 checkpoint/writes 内实测含 `_api_key` 与 `sk-` 明文（生产即用户真实 DeepSeek Key；`data/` 已 gitignore，未泄漏进版本库）。③ **MAJOR（证据强度）**——验收/文档对 P2-4 的口径修正（新增 Key 通路门禁项 + 全量复跑 + limitation 补齐）。另修 3 个 minor（前端类型 / API 路径下发 / 删除顺序）。
+
+**修复 1（BLOCKER）：搜索 Key 惰性解析 + `verify.enabled` 生效（`eb68045`）**
+- `app/verify/verify.py`：`VerifyContext` 不再在构造期固化客户端，改为**每次 `verify()` 惰性解析**——`resolve_key()` 按 `KeyStore.get_verify_key()` → `cfg.verify.api_key`（`.env` 回退）取值；`_search_client()` 在 Key 为空时返回 `None`（保持既有「未配置 Key → 静默跳过」降级语义），Key 变化才重建客户端、同 Key 复用缓存（避免每题重建）；`BochaClient._api_key` 必来自当前 Key
+- `app/verify/verify.py`：`cfg.verify.enabled is False` → `verify()` 直接 `return None`（此前该配置项**无任何消费方**）
+- `app/main.py`：lifespan 中 `cfg.verify.api_key` 非空时 `key_store.set_verify_key(...)` 种子（与 LLM Key 种子同模式），使 `.env` 的 `VERIFY_API_KEY` 重启后可用；并把图实际使用的 `verify_ctx` 挂到 `app.state.verify_ctx`（供验收/诊断断言 Key 通路，图为同一实例）
+- 关键测试（TDD，**修复前必失败**）：`tests/test_verify.py::test_runtime_key_reaches_search_client`——monkeypatch `app.verify.bocha.urllib.request.urlopen` 捕获真实请求头，构造时无 Key → 运行期 `set_verify_key("bocha-real")` → `verify()` → 断言 `Authorization == "Bearer bocha-real"`（**修复前 `captured == {}`：Key 为空时 `search()` 直接抛错、请求根本没发出**）；另有 `test_client_rebuilt_only_when_key_changes`（Key 变化重建 / 同 Key 复用）、`test_cfg_api_key_used_when_keystore_empty`（`.env` 回退）、`test_disabled_by_config_skips_without_any_call`（enabled=False 时 LLM 调用数 = 0）、`test_missing_key_and_disabled_returns_none_without_http`；`tests/test_settings.py`（新建）覆盖 `PUT/GET /api/settings/verify-key`（置位/掩码/清空）+ lifespan 种子（`monkeypatch` 注入 `cfg.verify.api_key`）
+
+**修复 2（MAJOR，安全）：API Key 不再落盘 + schema 对齐（`204d81c`）**
+- **方案选择：方案 A（持久化边界脱敏）**。理由：langgraph 的写盘路径（`put` / `put_writes`）集中收敛在 checkpointer，一处拦截即可覆盖 invoke / update_state / writes 三条路径，改动面最小；且设计已有「会话 Key 快照缺失时回退全局 Key」（P2-3 `KeyStore.get`）+ 调用方每次注入 Key 的约定，读回端无需补偿。方案 B（Key 迁到 `RunnableConfig.configurable`）需改所有节点签名与全部直接调用节点的测试，回归面大，本轮不采纳
+- `app/store/checkpointer.py`：新增 `SanitizingSqliteSaver`（`SanitizingSqliteSaver.put_writes` 按通道名丢弃 `_api_key` 写入——该通道写入值是**裸字符串 Key**、不是 dict，只在 serde 里递归删键抓不到，且通道名会进 `writes.channel` 列；`put` 剔除 `updated_channels` 里的通道名）+ `SanitizedSerde`（`dumps*` 前 `strip_sensitive` 递归剔除 `_api_key` 键，覆盖 `channel_values` / `channel_versions` / `versions_seen` 与 metadata json），`create_checkpointer` 用二者构造
+- `app/interview/state.py`：`_api_key` 注释改为与实现一致的「不落盘：写盘前由 serde/saver 剔除，每次 invoke/update_state 由调用方重新注入」；`Score` 补声明 `topic`（`nodes/__init__.py:234` 写入）与 `verification`（`:245` 写入）——minor 2
+- 关键测试（TDD，**修复前必失败**）：`tests/test_checkpointer.py::test_checkpoint_raw_bytes_exclude_api_key`——临时库 + `create_checkpointer(cfg)` 跑真实 `invoke` + `update_state`，断言**库文件 + WAL/SHM 侧车文件的原始字节**不含 `b"_api_key"` / `b"sk-"` / 测试 Key（修复前断言失败：`assert b'_api_key' not in raw` → 实测命中 msgpack blob 与 `writes.channel` 列）；`test_state_channel_key_absent_after_restart`（重启读回的状态不含 `_api_key`，其余字段完整）；`test_resume_and_report_after_restart_with_injected_key`（同库重建后续聊 evaluate/ask_question + skip-last/finish 的 `report_node` 路径均由调用方注入 Key，**无 KeyError**）
+- 实测落盘核验（本轮修复后）：本地 `data/interview.db` 共 3686 行 checkpoint，其中 **3436 行为修复前历史写入（仍含明文）、修复后新写入的 250 行全部不含 `_api_key`**；`writes` 表 `value` 列历史 794 行含 `sk-`、修复后新增行 0
+
+**修复 3（MAJOR，证据强度）：验收/文档口径修正（`_acceptance_p2.py`）**
+- P2-4 **新增门禁项「P2-4 Key 通路（配置页 Key 到达搜索客户端）」**：断言图实际使用的 `app.state.verify_ctx` 解析出的 Key 与 `_search_client()._api_key` 均等于占位 Key，并记录被实际调用的客户端实例持有的 Key（fake search 捕获 `self`）。**修复前该门禁项必 FAIL**（见下「修复前证据」），修复后 PASS
+- 全量复跑 `uv run python _acceptance_p2.py` → **门禁 passed=15 failed=0（退出码 0）｜观察项 total=1 failed=0｜依赖缺失 dep=0**（门禁 14 → 15 = 新增 Key 通路项）
+
+**修复 4（MINOR）**
+- `web/src/api/types.ts`：`SSEEvent` 的 `assess` 变体补 `verification?: Verification | null`（`ChatView.vue` 会读 `e.verification`）。**本次未把 build 切到 `vue-tsc`**（工具链改动风险高）→ 记入「已知限制/deferred」
+- `app/api/resume.py` + `app/store/resume.py`：API 响应改用新增的 `Resume.to_public_dict()`（不下发服务端本地相对路径 `path`，前端未使用）；`to_dict()` 保留 `path` 供内部消费（`app/store/resume.py::delete_resume` 返回值等），**未破坏任何内部调用**
+- `app/api/sessions.py`：`delete_session` 改为**先 `delete_thread` 再删会话行/Key**。理由：原顺序在 `delete_thread` 抛错时留下「会话行已删 → 重试 404」的**不可重试**不一致态；前置后无论哪一步失败都可整体重试（`delete_thread` 幂等），语义上更贴合 N-8「三处同步物理删」的全有或全无。回归用例 `tests/test_api_sessions.py::test_delete_session_retryable_when_thread_cleanup_fails`（**修复前必失败**：第二次 DELETE 会 404）
+
+**修复前证据（TDD 失败记录，均为真实运行）**
+- 修复 1：`pytest tests/test_verify.py tests/test_settings.py` → **4 failed**（`test_runtime_key_reaches_search_client` `assert None == 'Bearer bocha-real'`、`test_client_rebuilt_only_when_key_changes` `KeyError: 'authorization'`、`test_cfg_api_key_used_when_keystore_empty` `assert None == 'Bearer bocha-env'`、`test_lifespan_seeds_verify_key_from_env` `assert None == 'bocha-from-env'`）
+- 修复 2：`pytest tests/test_checkpointer.py` → **3 failed**（`assert b'_api_key' not in raw` 命中落盘字节；另两条 `assert '_api_key' not in values`）
+- 修复 3：临时把 `_search_client()` 还原为「构造期固化空 Key」语义后跑 `--only p2-4` → `[FAIL][gate] P2-4 Key 通路 | graph_verify_ctx_key='bocha-acceptance' resolved_client_key='' search_calls=3 called_client_keys=['', '', '']`、`门禁 passed=1 failed=2（退出码 1）`（该临时改动已 `git checkout` 还原，未进入任何提交；注：同轮「未配置 Key 对照」项亦 FAIL 属该还原手法使 `None` 短路缺失的副产物，真实修复前该对照组为 PASS）
+- 修复 4-3：把删除顺序临时还原后跑该用例 → `AssertionError`（第二次 DELETE 404、会话行已消失）
+
+**验证结果（本轮，2026-09-18）**
+- `uv run pytest tests -q` → **280 passed**（16.71s，1 条三方 `DeprecationWarning`）——较基线 267 例 +13（verify 5 / settings 3 / checkpointer 3 / api_sessions 1 / resume_api 1）
+- `uv run ruff check app/ tests/ _acceptance_p2.py` → **All checks passed!**；`uv run ruff format --check` → **103 files already formatted**（pre-commit 全钩子通过）
+- `uv run python _acceptance_p2.py`（全量）→ **门禁 passed=15 failed=0（退出码 0）／观察项 total=1 failed=0／dep=0**：
+  - P2-1 解析成功率 20/20 = 100%（≥90%）、字段命中率 20/20 = 100%（≥85%）、考点清单落表一致 PASS
+  - 观察项｜retry 路径（R6）：构造探针 `resume_01.md`（rid=`r-bd69377c`），原文件保留=True、http=200、`resp_status=processing`、`final_status=ready`、耗时 24.2s → PASS
+  - P2-2 考点清单 ≥10（ready=20 scope=run）、配比复算 `[1,4,7]`/`[1,2,3,4,6,7,8,9]`/`[1,3,5,7,9]`、注入链路一致性关键词覆盖 **38/45 = 84%**（≥80%，题干命中 3/3）
+  - P2-3 会话记录恢复（同库重建）+ 对话历史恢复（`msgs=1 qidx=3`）PASS
+  - P2-4 事实核验 `status=verified`（claims 3 / sources 6）；**Key 通路 `graph_verify_ctx_key='bocha-acceptance'`、`resolved_client_key='bocha-acceptance'`、`search_calls=3`、被调用客户端 Key 全为占位 Key → PASS（新增项）**；未配置 Key 对照 `is_set=False` + `verification=null` PASS
+  - P2-5 第 1 题核验 `status=verified`（claims 3 / sources 6）、skip 全程无 error、端到端（末题 skip 自动出报告，`GET /report` http=200、`report_chars=1803`、`summary` dict、`total_score=15`、四维齐）、导出 200 PASS
+- `cd web; npm run build` → 构建成功（built in 365ms）
+- 未新增第三方依赖
+- **复现性**：三个提交落地后，在同一提交树再复跑一次全量验收 → **门禁同样 passed=15 failed=0（退出码 0）、观察项 1 PASS、dep=0**（P2-2 注入链路一致性 37/45 = 82%、retry 观察项 30.5s、P2-4 Key 通路仍为 `resolved_client_key='bocha-acceptance'` + `search_calls=3`）——两轮均 0 失败，波动仅出现在 P2-2 口径（见 F1）
+
+**已知限制 / deferred（本轮审查发现的测试缺口，如实记录，不淡化）**
+- **真实博查 Key 从未验收**：P2-4/P2-5 均为「占位 Key + 补丁」，`_acceptance_p2.py` 依旧以类属性 patch `BochaClient.search` 走通流程（本轮新增的 Key 通路门禁项已证明「Key 到达客户端」，但**真实 HTTP 出网、真实博查响应解析、真实配额/限流**仍未覆盖）
+- **修复 1 的用例仍非真实出网**：`tests/test_verify.py` 新用例是「假 `urlopen` + 真 `BochaClient`」（能证明 Key 通路与请求头，但不证明真实服务可用）；原有 fake bocha 用例（不校验 Key）保留
+- **修复 2 的读回端契约偏隐式**：脱敏后 checkpoint 不再含 `_api_key`，续聊/报告可用性依赖「调用方每次注入 Key + `KeyStore` 回退全局 Key」这一约定；节点内仍是 `state["_api_key"]` 直接取值（缺 Key 会 `KeyError`），尚无「缺 Key 显式报错/自动回退」的节点级防护。当前所有入口（chat 四分支 / finish / skip-last）均已注入并有用例覆盖，但新增入口若忘记注入不会被类型或测试拦住
+- **历史库明文未清除**：本地 `data/interview.db` 仍含修复前写入的明文 Key（checkpoint 3436 行 / writes 794 行）。**建议删除并重建**（`data/` 已 gitignore；本地开发库，删库即丢失历史会话）；本轮不代用户删库
+- **前端仍未类型检查**：`web` 的 build 仍是 `vite build`（无 `vue-tsc`），本次只补了 `SSEEvent` 的 `verification` 字段；切换 `vue-tsc` 属工具链改动，风险高 → **deferred**（需单独一轮处理既有类型错误）
+- **删除顺序的失败语义**：`delete_session` 现在「`delete_thread` 失败 → 500 且三处都不删（可重试）」。若 checkpointer 清理长期失败，该会话将无法删除（但数据保持一致），未做「吞并 + 告警」的运维兜底
+- **P1 复跑仍阻塞**：Qdrant(6333)/ES(9200)/TEI(8081) 仍未监听 → `_acceptance_p1.py` 无法执行，P1 侧回归证据维持 pytest 全量 + ruff + 前端 build；P1-3（28%，标准 ≥90%）与 P1-4 decline 子项搁置记录与标准均不变
+- **延续 limitation**：F1（P2-2 口径为注入链路一致性，随 LLM 非确定性波动：89% / 91% / 80% / 84% / 82%）、F2（语料与 gold 自产自标）、F5（P2-3 未覆盖真实 uvicorn 重启）、F8（无中文 PDF 语料）均维持
+
+**项目结构更新**
+- 修改（`app/`）：`app/verify/verify.py`、`app/main.py`、`app/store/checkpointer.py`、`app/interview/state.py`、`app/api/resume.py`、`app/store/resume.py`、`app/api/sessions.py`
+- 修改（`tests/`）：`tests/test_verify.py`、`tests/test_checkpointer.py`、`tests/test_api_sessions.py`、`tests/test_resume_api.py`（仅新增用例）；新增：`tests/test_settings.py`
+- 修改（前端 / 脚本 / 文档）：`web/src/api/types.ts`、`_acceptance_p2.py`、`CHANGELOG.md`、`docs/project-status.md`
+- 提交拆分：`eb68045`（修复 1）/ `204d81c`（修复 2）/ `fix(p2): refresh acceptance evidence, docs, minor api/type fixes`（修复 3+4 + 文档）；`data/` 下无任何文件入库
+
 ## 2026-09-18 · P2 收尾：skip 分支缺陷修复验收确认 + 文档同步（门禁 14/14 PASS）
 
 **描述**：第 2 轮验收首次暴露的 app 侧缺陷「跳过非末题后下一题生成失败」**已修复**（提交 `8e2933a`），本轮做三件事且**只改文档、未改任何 `app/` 代码与既有测试断言**：① **全量复跑验收**（`uv run python _acceptance_p2.py`，不加 `--only`）→ **门禁 passed=14 failed=0（退出码 0）｜观察项 total=1 failed=0｜依赖缺失 dep=0**——原先唯一的门禁 FAIL「P2-5 skip 推进（无 error 事件）」**已转为 PASS**；② 把 CHANGELOG / `docs/project-status.md` 中该缺陷「验收暴露、未修、记 FAIL 待裁决」的口径**同步改为「验收暴露 → 已修复」**（保留下方第 2 轮条目原有运行事实与根因链，仅补注修复结论，不篡改历史）；③ 按本轮实测值校准 §3/§4 与 limitation 行（P2-1 100%、P2-2 注入链路一致性 36/45=80%、retry 观察项 31.3s）。

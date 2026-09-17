@@ -1,5 +1,6 @@
 import asyncio
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.llm.keys import KeyStore
@@ -208,6 +209,36 @@ async def test_delete_session_not_found():
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.delete("/api/sessions/nonexistent")
             assert resp.status_code == 404
+
+
+async def test_delete_session_retryable_when_thread_cleanup_fails(tmp_path, monkeypatch):
+    """最终审查修复轮：checkpointer 清理前置于会话行删除 → 失败时可整体重试。
+
+    修复前顺序（先删行/Key，再 delete_thread）下，本例第二次 DELETE 会 404，
+    留下「会话已消失但 thread 状态无法清理」的不一致态。
+    """
+    async with app.router.lifespan_context(app):
+        app.state.session_store = SqliteSessionStore(tmp_path / "interview.db")
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await _set_key(client)
+            sid = (
+                await client.post("/api/sessions", json={"scene": "intern", "question_count": 5})
+            ).json()["id"]
+
+            def _boom(*args, **kwargs):
+                raise RuntimeError("checkpointer 清理失败")
+
+            monkeypatch.setattr("app.api.sessions.delete_thread", _boom)
+            with pytest.raises(RuntimeError):
+                await client.delete(f"/api/sessions/{sid}")
+            # 会话行仍在 → 可重试（而非 404 死锁）
+            assert any(s["id"] == sid for s in (await client.get("/api/sessions")).json())
+
+            monkeypatch.undo()
+            resp = await client.delete(f"/api/sessions/{sid}")
+            assert resp.status_code == 200
+            assert (await client.get("/api/sessions")).json() == []
 
 
 async def test_list_sessions_progress_fields():

@@ -18,6 +18,13 @@ P2-3 跨重启进程内模拟（SqliteSaver + SqliteSessionStore 同库重建）
 SUMMARY 分别打印三类计数，避免「依赖未满足」与「应用缺陷 FAIL」同形。
 不修改任何 app/ 代码；暴露应用缺陷时记 FAIL + 归因落档。
 
+最终审查修复轮（第 3 轮）要点：
+- 修复 3-1：P2-4 保留 `BochaClient.search` 类属性补丁，但**新增门禁项「P2-4 Key 通路」**
+  ——断言图实际使用的 `app.state.verify_ctx` 解析出的 Key 与搜索客户端 `_api_key`
+  均等于占位 Key（并校验被调用的客户端实例持有的 Key）。修复前该客户端 `_api_key`
+  恒为空（lifespan 一次性构造），本项必然 FAIL，即 BLOCKER「配置页 Key 传不到搜索客户端」
+  的可复现证据；修复后为 PASS。P2-4 对照组（清 Key → verification=null）口径不变。
+
 审查修复轮（第 2 轮）要点：
 - minor-1：`_scoped_ready` 为空（依赖缺失/用法错误）改为 `kind="dep"` 记录，
   不计入 failed、不影响退出码，SUMMARY 单独列出。
@@ -659,7 +666,7 @@ def p2_3(cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
-# P2-4 web_verify：占位 Key + BochaClient.search 类属性补丁
+# P2-4 web_verify：占位 Key + BochaClient.search 类属性补丁 + Key 通路断言
 # ---------------------------------------------------------------------------
 
 
@@ -673,8 +680,10 @@ def p2_4(client: TestClient, cfg) -> None:
         _ = _sse_text(evts)  # 题干（占位消费）
 
     original_search = bocha_mod.BochaClient.search
+    used_clients: list = []  # 被实际调用的搜索客户端实例（Key 通路证据）
 
     def _fake_search(self, query: str, count: int = 3):
+        used_clients.append(self)
         return [
             SearchResult(
                 title="Redis 持久化机制详解",
@@ -724,6 +733,27 @@ def p2_4(client: TestClient, cfg) -> None:
             "P2-4 事实核验（配置 Key + 补丁）",
             ok,
             f"answer_len={len(answer)} verification={v_text}",
+        )
+
+        # 1b) Key 通路门禁项（修复轮新增）：证明「配置页设置的 Key 真正到达搜索客户端」。
+        # 修复前 lifespan 一次性构造 BochaClient（此时 KeyStore 无 Key）→ 客户端 _api_key 恒为空
+        # → search() 恒抛 BochaError → 本项必然 FAIL（KeyStore 里即使有 Key 也无效）。
+        # 断言对象 = 图实际使用的 VerifyContext（app.state.verify_ctx，lifespan 注入的同一实例）。
+        resolved = getattr(app.state, "verify_ctx", None)
+        ctx_key = resolved.resolve_key() if resolved is not None else ""
+        client_key = getattr(resolved._search_client(), "_api_key", "") if resolved else ""
+        used_keys = [getattr(c, "_api_key", "") for c in used_clients]
+        key_ok = (
+            resolved is not None
+            and ctx_key == P2_VERIFY_KEY
+            and client_key == P2_VERIFY_KEY
+            and (not used_keys or all(k == P2_VERIFY_KEY for k in used_keys))
+        )
+        report.add(
+            "P2-4 Key 通路（配置页 Key 到达搜索客户端）",
+            key_ok,
+            f"graph_verify_ctx_key={ctx_key!r} resolved_client_key={client_key!r} "
+            f"search_calls={len(used_clients)} called_client_keys={used_keys}",
         )
 
         # 2) 对照组：清 Key → 旁证 GET is_set=False → 提交**同一条 answer** → verification 为 null

@@ -87,3 +87,25 @@ def test_delete_resume(app, tmp_path):
     assert resp.status_code == 200
     assert resp.json()["status"] == "deleted"
     assert client.get("/resumes").json() == []
+
+
+def test_resume_response_omits_server_path(app, tmp_path):
+    """最终审查修复轮：API 响应不下发服务端本地相对路径（前端未使用）；
+    内部 to_dict() 仍保留 path（删除时按 path 物理删原文件）。"""
+    (tmp_path / "data" / "resumes").mkdir(parents=True, exist_ok=True)
+    client = TestClient(app)
+    up = client.post(
+        "/resumes", files={"file": ("a.md", io.BytesIO(b"# x"), "text/markdown")}
+    ).json()["resume"]
+    assert "path" not in up
+
+    listed = client.get("/resumes").json()
+    assert listed
+    assert all("path" not in item for item in listed)
+
+    store = app.state.resume_store
+    store.update_failed(up["id"], "boom")
+    retried = client.post(f"/resumes/{up['id']}/retry").json()["resume"]
+    assert "path" not in retried
+
+    assert "path" in store.get_resume(up["id"]).to_dict()  # 内部消费不受影响
