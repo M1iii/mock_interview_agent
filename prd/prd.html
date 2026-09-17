@@ -1,0 +1,2064 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 面试官 · PRD V1.0</title>
+<style>
+  :root {
+    /* === 主题：教育 / AI 产品 → 暖橙 + 中性阅读面 === */
+    --primary-color: #EA580C;
+    --primary-hover: #C2410C;
+    --primary-light: rgba(234, 88, 12, 0.12);
+    --primary-grad: linear-gradient(135deg, #F97316, #EA580C);
+    --bg-primary: #F5F4F1;
+    --bg-secondary: #FFFFFF;
+    --text-main: #1F2430;
+    --text-muted: #667085;
+    --text-faint: #98A2B3;
+    --border-color: #E7E4DE;
+    --card-radius: 12px;
+    --card-shadow: 0 1px 3px rgba(23,32,51,0.05), 0 4px 16px rgba(23,32,51,0.05);
+    --success: #2F9E44;
+    --success-bg: #EBFBEE;
+    --warning: #E8590C;
+    --warning-bg: #FFF4E6;
+    --danger: #E03131;
+    --danger-bg: #FFF5F5;
+    --info: #1971C2;
+    --info-bg: #E7F5FF;
+    --phase-p0: #1971C2;
+    --phase-p0-bg: #E7F5FF;
+    --phase-p1: #2F9E44;
+    --phase-p1-bg: #EBFBEE;
+    --phase-p2: #E8590C;
+    --phase-p2-bg: #FFF4E6;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+    --font-heading: -apple-system, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-body: -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.15, 1);
+    --transition-fast: 150ms var(--ease-out-quart);
+    --transition-normal: 250ms var(--ease-out-quart);
+
+    /* === 4pt 间距体系 === */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-base: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    --space-2xl: 48px;
+    --space-3xl: 64px;
+
+    /* === Soft UI 紫色主题（原型应用界面 · 参考图风格） === */
+    --soft-bg: oklch(96.5% 0.018 280);
+    --soft-surface: oklch(100% 0 0 / 0.72);
+    --soft-surface-strong: oklch(100% 0 0 / 0.88);
+    --soft-ink: oklch(25% 0.03 280);
+    --soft-muted: oklch(55% 0.03 280);
+    --soft-faint: oklch(70% 0.025 280);
+    --soft-hairline: oklch(25% 0.03 280 / 0.08);
+    --soft-hairline-strong: oklch(25% 0.03 280 / 0.14);
+    --soft-accent: oklch(60% 0.22 275);
+    --soft-accent-light: oklch(70% 0.2 280);
+    --soft-accent-dark: oklch(52% 0.22 270);
+    --soft-accent-grad: linear-gradient(135deg, oklch(70% 0.2 280), oklch(55% 0.22 270));
+    --soft-accent-grad-hover: linear-gradient(135deg, oklch(65% 0.2 280), oklch(48% 0.22 270));
+    --soft-bubble-ai: oklch(94% 0.015 280);
+    --soft-bubble-user: oklch(58% 0.22 275);
+    --soft-overlay: oklch(100% 0 0 / 0.65);
+    --soft-overlay-hover: oklch(100% 0 0 / 0.85);
+    --soft-shadow-sm: 0 4px 16px oklch(55% 0.15 280 / 0.12);
+    --soft-shadow-md: 0 12px 40px oklch(55% 0.18 280 / 0.16);
+    --soft-shadow-lg: 0 20px 60px oklch(55% 0.2 275 / 0.22);
+    --soft-shadow-accent: 0 10px 28px oklch(55% 0.2 275 / 0.38);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    color: var(--text-main);
+    background: var(--bg-primary);
+    line-height: 1.65;
+    height: 100vh;
+    overflow: hidden;
+  }
+  button { font-family: inherit; }
+  input, textarea, select { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+  /* ===== 顶栏 ===== */
+  .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 1000;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px;
+    background: var(--soft-surface);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid oklch(100% 0 0 / 0.5);
+    box-shadow: 0 2px 16px oklch(55% 0.15 280 / 0.08);
+  }
+  .top-bar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .logo-mark {
+    width: 28px; height: 28px; border-radius: 8px; flex: none;
+    background: var(--soft-accent-grad); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    box-shadow: var(--soft-shadow-sm);
+  }
+  .top-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--soft-ink); }
+  .version-tag {
+    font-size: 11px; font-weight: 600; color: var(--soft-accent);
+    background: oklch(70% 0.2 280 / 0.15);
+    padding: 2px var(--space-sm); border-radius: 999px; flex: none;
+  }
+  .mode-toggle {
+    display: flex; gap: 2px; background: oklch(70% 0.2 280 / 0.12);
+    border-radius: var(--space-sm); padding: 2px; flex: none;
+  }
+  .mode-btn {
+    padding: 5px 14px; border: none; border-radius: 7px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: var(--soft-muted); background: transparent;
+    transition: all var(--transition-fast);
+  }
+  .mode-btn.active {
+    background: var(--soft-surface-strong);
+    color: var(--soft-ink);
+    font-weight: 600;
+    box-shadow: 0 2px 6px oklch(55% 0.15 280 / 0.1);
+  }
+
+  /* ===== 主布局 ===== */
+  .main-layout { display: flex; height: calc(100vh - 56px); margin-top: 56px; }
+  .left-panel {
+    flex: 0 0 46%; min-width: 300px; max-width: 70%;
+    position: relative; overflow: hidden; background: var(--bg-primary);
+  }
+  .resize-handle {
+    flex: 0 0 6px; cursor: col-resize; position: relative; z-index: 5;
+    background: transparent; transition: background var(--transition-fast);
+  }
+  .resize-handle:hover, .resize-handle.active { background: var(--primary-color); }
+  .right-panel { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--bg-secondary); }
+
+  /* ===== 右侧 Tabs ===== */
+  .tab-bar {
+    display: flex; padding: 0 20px; border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary); overflow-x: auto; flex: none;
+  }
+  .tab-btn {
+    padding: 12px 18px; border: none; background: none; cursor: pointer;
+    font-size: 14px; font-weight: 500; color: var(--text-muted);
+    border-bottom: 2px solid transparent; white-space: nowrap;
+    transition: all var(--transition-fast);
+  }
+  .tab-btn:hover { color: var(--text-main); }
+  .tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); font-weight: 600; }
+  .tab-content-wrapper { flex: 1; overflow-y: auto; padding: 24px 26px 56px; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ===== 右侧文档排版 ===== */
+  .pane-inner { max-width: 860px; margin: 0 auto; }
+  .pane-inner h2 { font-size: 21px; margin-bottom: 6px; font-family: var(--font-heading); }
+  .pane-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+  .pane-inner h3 { font-size: 16px; margin: 26px 0 10px; font-family: var(--font-heading); }
+  .pane-inner h4 { font-size: 14px; margin: 18px 0 8px; color: var(--text-main); font-family: var(--font-heading); }
+  .pane-inner p { font-size: 14px; color: var(--text-main); margin-bottom: 10px; }
+  .pane-inner ul, .pane-inner ol { margin: 8px 0 12px; padding-left: 22px; font-size: 14px; }
+  .pane-inner li { margin-bottom: 5px; }
+  .pane-inner table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; }
+  .pane-inner th, .pane-inner td { border: 1px solid var(--border-color); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .pane-inner th { background: #FAFAF8; font-weight: 600; }
+  .pane-inner code {
+    background: var(--bg-primary); border: 1px solid var(--border-color);
+    padding: 1px 5px; border-radius: 4px; font-size: 12.5px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+  }
+
+  .card {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: var(--card-radius); padding: 18px 20px; margin-bottom: 16px;
+    box-shadow: var(--card-shadow);
+  }
+  .card > h4 { margin-top: 0; }
+
+  .feature-section {
+    border: 1px solid var(--border-color); border-radius: var(--card-radius);
+    padding: 20px 24px; margin-bottom: 18px; background: var(--bg-secondary);
+    box-shadow: var(--card-shadow);
+    transition: box-shadow var(--transition-normal), border-color var(--transition-normal);
+    scroll-margin-top: 60px;
+  }
+  .feature-section.highlight { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-light); }
+  .feature-section > h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .feature-section > h4 { margin-top: 18px; }
+
+  .phase-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .tag-p0 { color: var(--phase-p0); background: var(--phase-p0-bg); }
+  .tag-p1 { color: var(--phase-p1); background: var(--phase-p1-bg); }
+  .tag-p2 { color: var(--phase-p2); background: var(--phase-p2-bg); }
+
+  .badge { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .badge-success { color: var(--success); background: var(--success-bg); }
+  .badge-warning { color: var(--warning); background: var(--warning-bg); }
+  .badge-danger { color: var(--danger); background: var(--danger-bg); }
+  .badge-info { color: var(--info); background: var(--info-bg); }
+  .badge-gray { color: var(--text-muted); background: var(--bg-primary); }
+
+  .callout {
+    border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: 13px;
+    border: 1px solid; display: flex; gap: 8px; align-items: flex-start;
+  }
+  .callout-info { background: var(--info-bg); border-color: rgba(25,113,194,0.2); color: #1C4E80; }
+  .callout-warning { background: var(--warning-bg); border-color: rgba(232,89,12,0.25); color: #96480E; }
+  .callout .co-icon { flex: none; margin-top: 1px; }
+
+  /* ===== 概览页视觉 ===== */
+  .ov-hero {
+    background: var(--primary-grad); border-radius: 14px; color: #fff;
+    padding: 22px 24px; margin-bottom: 20px;
+  }
+  .ov-hero h3 { margin: 0 0 6px; font-size: 17px; color: #fff; }
+  .ov-hero p { font-size: 13.5px; color: rgba(255,255,255,0.92); margin: 0; }
+  .ov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 14px 0 20px; }
+  .ov-metric { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 16px; }
+  .ov-metric .ov-num { font-size: 22px; font-weight: 700; color: var(--primary-color); font-family: var(--font-heading); }
+  .ov-metric .ov-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .phase-table td:first-child { font-weight: 600; white-space: nowrap; }
+
+  /* ===== 流程图 ===== */
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0 8px; }
+  .flow-node {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); text-align: center;
+  }
+  .flow-node.hot { border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-hover); }
+  .flow-node.dim { color: var(--text-muted); background: var(--bg-primary); }
+  .flow-arrow { color: var(--text-faint); font-size: 13px; flex: none; }
+  .flow-label { width: 100%; font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+
+  /* ===== 浏览器原型框 ===== */
+  .browser-frame {
+    width: 1200px; height: 800px; position: absolute; transform-origin: 0 0;
+    border-radius: 10px; overflow: hidden; background: #fff;
+    box-shadow: 0 8px 32px rgba(23,32,51,0.16); border: 1px solid var(--border-color);
+  }
+  .browser-toolbar {
+    height: 36px; background: #F2F1EE; border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center; padding: 0 12px; gap: 10px;
+  }
+  .browser-dots { display: flex; gap: 6px; }
+  .browser-dots span { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-red { background: #FF5F57; } .dot-yellow { background: #FEBC2E; } .dot-green { background: #28C840; }
+  .browser-address {
+    flex: 1; background: #fff; border: 1px solid var(--border-color); border-radius: 6px;
+    font-size: 11.5px; color: var(--text-muted); padding: 3px 10px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+  }
+  .browser-screen { position: relative; height: calc(100% - 36px); overflow: hidden; background: #F2F1EE; }
+  .page { position: absolute; inset: 0; display: none; }
+  .page.active { display: flex; animation: pageIn 0.22s ease; }
+  @keyframes pageIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ===== 原型：应用外壳 ===== */
+  .app-shell { display: flex; width: 100%; height: 100%; background: #F5F4F1; }
+  .app-sidebar {
+    width: 216px; flex: none; background: #fff; border-right: 1px solid var(--border-color);
+    display: flex; flex-direction: column;
+  }
+  .app-logo { display: flex; align-items: center; gap: 8px; padding: 13px 16px; font-weight: 700; font-size: 14px; }
+  .app-logo .logo-badge { width: 24px; height: 24px; border-radius: 7px; background: var(--primary-grad); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .app-nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .app-nav-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: none;
+    border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-main);
+    background: transparent; text-align: left; width: 100%;
+    transition: all var(--transition-fast);
+  }
+  .app-nav-item:hover { background: var(--bg-primary); }
+  .app-nav-item.active { background: var(--primary-light); color: var(--primary-color); font-weight: 600; }
+  .app-nav-item svg { flex: none; }
+  .session-side { padding: 10px 10px 0; overflow-y: auto; flex: 1; }
+  .session-side-title { font-size: 11px; color: var(--text-faint); padding: 4px 10px 6px; }
+  .session-side-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+    cursor: pointer; font-size: 12.5px; color: var(--text-main); transition: background var(--transition-fast);
+  }
+  .session-side-item:hover { background: var(--bg-primary); }
+  .session-side-item .ss-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .session-side-item .ss-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-side-item .ss-meta { font-size: 11px; color: var(--text-faint); }
+  .app-main { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 24px; }
+
+  /* ===== 原型：通用组件 ===== */
+  .p-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .p-head h3 { font-size: 17px; margin: 0; flex: 1; min-width: 120px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-color);
+    background: #fff; color: var(--text-main); font-size: 12.5px; font-weight: 500;
+    padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: all var(--transition-fast);
+  }
+  .btn:hover { border-color: var(--text-faint); }
+  .btn-primary { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-ghost { border: none; background: transparent; color: var(--text-muted); }
+  .btn-ghost:hover { background: var(--bg-primary); color: var(--text-main); }
+
+  .p-card { background: #fff; border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .p-card-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+
+  .dropzone {
+    border: 1.5px dashed #C9C6C0; border-radius: 10px; background: #FAFAF8;
+    padding: 22px; text-align: center; cursor: pointer; transition: all var(--transition-fast);
+    color: var(--text-muted); font-size: 12.5px;
+  }
+  .dropzone:hover { border-color: var(--primary-color); background: var(--primary-light); }
+  .dropzone strong { color: var(--text-main); display: block; margin-bottom: 4px; }
+
+  .list-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border-color); font-size: 12.5px; }
+  .list-row:last-child { border-bottom: none; }
+  .list-row .lr-main { flex: 1; min-width: 0; }
+  .list-row .lr-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-row .lr-sub { font-size: 11.5px; color: var(--text-faint); }
+
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 999px; padding: 2px 8px; }
+  .chip-link { color: var(--info); background: var(--info-bg); border-color: rgba(25,113,194,0.2); cursor: pointer; }
+
+  .session-card {
+    background: #fff; border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03); cursor: pointer; transition: all var(--transition-fast);
+  }
+  .session-card:hover { border-color: var(--primary-color); box-shadow: 0 2px 10px rgba(234,88,12,0.08); }
+  .session-card .sc-main { flex: 1; min-width: 0; }
+  .session-card .sc-title { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .session-card .sc-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* 对话区 */
+  .chat-wrap { display: flex; gap: 16px; height: 100%; }
+  .chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .chat-list { flex: 1; overflow-y: auto; padding: 4px 2px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { display: flex; gap: 8px; max-width: 88%; }
+  .msg .msg-avatar {
+    width: 28px; height: 28px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: #fff; font-weight: 700;
+  }
+  .msg-ai .msg-avatar { background: var(--primary-grad); }
+  .msg-user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg-user .msg-avatar { background: #3B5BDB; }
+  .msg-bubble { background: #fff; border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .msg-user .msg-bubble { background: #EDF2FF; border-color: rgba(59,91,219,0.15); }
+  .msg-meta { font-size: 11px; color: var(--text-faint); margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+  .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; } .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+  .chat-input-wrap { border: 1px solid var(--border-color); border-radius: 10px; background: #fff; padding: 8px 10px; }
+  .chat-input-wrap textarea { width: 100%; border: none; resize: none; font-size: 12.5px; min-height: 40px; outline: none; color: var(--text-main); }
+  .chat-input-actions { display: flex; align-items: center; gap: 8px; padding-top: 6px; }
+  .chat-input-actions .spacer { flex: 1; }
+
+  .chat-side { width: 210px; flex: none; display: flex; flex-direction: column; gap: 12px; }
+  .assess-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); padding: 4px 0; }
+  .assess-item .ai-check { color: var(--success); font-weight: 700; }
+
+  /* 进度条 */
+  .progress-track { height: 6px; background: var(--bg-primary); border-radius: 999px; overflow: hidden; flex: 1; min-width: 80px; }
+  .progress-fill { height: 100%; background: var(--primary-grad); border-radius: 999px; width: 20%; transition: width 0.4s ease; }
+
+  /* 报告页 */
+  .score-ring { width: 110px; height: 110px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; }
+  .score-ring::before { content: ""; position: absolute; inset: 9px; background: #fff; border-radius: 50%; }
+  .score-ring .sr-num { position: relative; font-size: 26px; font-weight: 700; font-family: var(--font-heading); }
+  .score-ring .sr-total { position: relative; font-size: 11px; color: var(--text-muted); }
+  .dim-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12.5px; }
+  .dim-row .dim-name { width: 64px; flex: none; color: var(--text-muted); }
+  .dim-row .dim-track { flex: 1; height: 8px; background: var(--bg-primary); border-radius: 999px; overflow: hidden; }
+  .dim-row .dim-fill { height: 100%; border-radius: 999px; background: var(--primary-grad); }
+  .dim-row .dim-val { width: 32px; text-align: right; font-weight: 600; }
+
+  /* ===== 弹窗 ===== */
+  .modal-mask {
+    position: absolute; inset: 0; background: rgba(23,32,51,0.45); z-index: 50;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-mask.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 14px; width: 460px; max-width: calc(100% - 48px);
+    padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,0.22);
+  }
+  .modal h4 { font-size: 15px; margin-bottom: 14px; }
+  .form-field { margin-bottom: 12px; }
+  .form-field label { display: block; font-size: 12.5px; font-weight: 500; margin-bottom: 5px; }
+  .form-field input, .form-field select {
+    width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 7px 10px; font-size: 12.5px;
+  }
+  .radio-row { display: flex; gap: 8px; }
+  .radio-chip {
+    flex: 1; text-align: center; border: 1px solid var(--border-color); border-radius: 8px;
+    padding: 7px 6px; font-size: 12.5px; cursor: pointer; transition: all var(--transition-fast);
+  }
+  .radio-chip.selected { border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-hover); font-weight: 600; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* ===== 链接指示器 ===== */
+  .link-indicator {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text-main); color: #fff; font-size: 13px; padding: 8px 16px;
+    border-radius: 999px; opacity: 0; pointer-events: none; transition: all 0.25s ease; z-index: 2000;
+  }
+  .link-indicator.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ===== 文档视图 ===== */
+  .text-mode-doc { display: none; }
+  body.text-mode { overflow: auto; height: auto; background: #fff; }
+  body.text-mode .main-layout { display: none; }
+  body.text-mode .link-indicator { display: none !important; }
+  body.text-mode .text-mode-doc { display: block; max-width: 960px; margin: 0 auto; padding: 88px 40px 48px; }
+  .text-mode-doc h1 { font-size: 26px; border-bottom: 2px solid var(--text-main); padding-bottom: 10px; margin-bottom: 8px; }
+  .text-mode-doc .tm-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+  .text-mode-doc h2 { font-size: 21px; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--text-main); }
+  .text-mode-doc h3 { font-size: 17px; margin: 26px 0 10px; }
+  .text-mode-doc h4 { font-size: 14.5px; margin: 18px 0 8px; }
+  .text-mode-doc p { margin-bottom: 12px; text-align: justify; font-size: 14px; }
+  .text-mode-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+  .text-mode-doc th, .text-mode-doc td { border: 1px solid var(--border-color); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .text-mode-doc th { background: #FAFAF8; }
+  .text-mode-doc ul, .text-mode-doc ol { margin: 10px 0; padding-left: 26px; font-size: 14px; }
+  .text-mode-doc li { margin-bottom: 6px; }
+  .text-mode-doc .feature-section { box-shadow: none; }
+
+  /* ===== Soft UI 紫色主题 · 原型覆盖（参考图风格 · design-taste-frontend 规则） ===== */
+  #prototypeRoot .app-shell {
+    background: var(--soft-bg);
+    position: relative;
+    overflow: hidden;
+  }
+  /* 装饰性漂浮色块（参考图 3D blob 风格） */
+  #prototypeRoot .app-shell::before,
+  #prototypeRoot .app-shell::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+  #prototypeRoot .app-shell::before {
+    width: 220px; height: 220px;
+    top: -60px; right: -40px;
+    background: oklch(70% 0.2 280);
+  }
+  #prototypeRoot .app-shell::after {
+    width: 180px; height: 180px;
+    bottom: 80px; left: -50px;
+    background: oklch(65% 0.18 330);
+  }
+  #prototypeRoot .app-sidebar {
+    width: 232px; flex: none;
+    background: var(--soft-overlay);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border-right: 1px solid oklch(100% 0 0 / 0.5);
+    position: relative; z-index: 3;
+    transition: width 0.3s var(--ease-out-quart);
+    box-shadow: 2px 0 20px oklch(55% 0.15 280 / 0.08);
+  }
+  #prototypeRoot .app-sidebar.collapsed { width: 56px; }
+  #prototypeRoot .app-logo {
+    font-size: 14px; letter-spacing: -0.01em;
+    padding: var(--space-lg) var(--space-md) var(--space-md);
+    font-weight: 700;
+  }
+  #prototypeRoot .app-logo .logo-badge {
+    background: var(--soft-accent-grad);
+    border-radius: 9px;
+    color: #fff;
+    box-shadow: var(--soft-shadow-sm);
+  }
+  #prototypeRoot .app-nav-item {
+    border-radius: 10px; color: var(--soft-ink); font-size: 13px;
+    transition: all var(--transition-fast);
+  }
+  #prototypeRoot .app-nav-item:hover {
+    background: oklch(70% 0.2 280 / 0.1);
+    color: var(--soft-ink);
+  }
+  #prototypeRoot .app-nav-item.active {
+    background: var(--soft-accent-grad);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: var(--soft-shadow-sm);
+  }
+  #prototypeRoot .session-side-title { color: var(--soft-faint); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  #prototypeRoot .session-side-item { border-radius: 10px; transition: all var(--transition-fast); }
+  #prototypeRoot .session-side-item:hover { background: oklch(70% 0.2 280 / 0.1); }
+  #prototypeRoot .session-side-item .ss-dot { background: var(--soft-accent) !important; }
+  #prototypeRoot .app-main { padding: var(--space-xl) 32px; position: relative; z-index: 1; }
+  /* 折叠态 */
+  #prototypeRoot .app-sidebar.collapsed .app-logo span,
+  #prototypeRoot .app-sidebar.collapsed .app-nav-item span,
+  #prototypeRoot .app-sidebar.collapsed .session-side,
+  #prototypeRoot .app-sidebar.collapsed .cfg-status { display: none; }
+  #prototypeRoot .app-sidebar.collapsed .app-logo { justify-content: center; padding: var(--space-lg) 0 var(--space-md); }
+  #prototypeRoot .app-sidebar.collapsed .app-nav-item { justify-content: center; padding: var(--space-sm) 0; }
+  #prototypeRoot .sidebar-collapse {
+    flex: none; border: none; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    margin: var(--space-xs) var(--space-md) var(--space-sm); padding: var(--space-sm); border-radius: 10px;
+    color: var(--soft-muted); transition: all var(--transition-fast);
+  }
+  #prototypeRoot .sidebar-collapse:hover { background: oklch(70% 0.2 280 / 0.1); color: var(--soft-ink); }
+  #prototypeRoot .app-sidebar.collapsed .sidebar-collapse { margin: var(--space-xs) auto var(--space-sm); }
+
+  /* 通用组件：软卡片 / 胶囊按钮（Soft UI 风格） */
+  #prototypeRoot .p-card {
+    background: var(--soft-surface);
+    border: 1px solid oklch(100% 0 0 / 0.6);
+    border-radius: 18px;
+    box-shadow: var(--soft-shadow-sm);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+  #prototypeRoot .p-card-title { font-size: 13px; font-weight: 700; color: var(--soft-ink); }
+  #prototypeRoot .session-card {
+    background: var(--soft-surface);
+    border: 1px solid oklch(100% 0 0 / 0.6);
+    border-radius: 18px;
+    box-shadow: var(--soft-shadow-sm);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    transition: all var(--transition-fast);
+  }
+  #prototypeRoot .session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--soft-shadow-md);
+    border-color: oklch(70% 0.2 280 / 0.3);
+  }
+  #prototypeRoot .btn {
+    border-radius: 999px;
+    border: 1px solid oklch(100% 0 0 / 0.6);
+    background: var(--soft-surface);
+    color: var(--soft-ink);
+    font-weight: 500;
+    box-shadow: 0 2px 8px oklch(55% 0.15 280 / 0.08);
+    transition: all var(--transition-fast);
+  }
+  #prototypeRoot .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px oklch(55% 0.15 280 / 0.12);
+  }
+  #prototypeRoot .btn:active { transform: translateY(0) scale(0.98); }
+  #prototypeRoot .btn-ghost {
+    border: none; background: transparent;
+    color: var(--soft-muted);
+    box-shadow: none;
+  }
+  #prototypeRoot .btn-ghost:hover {
+    background: oklch(70% 0.2 280 / 0.1);
+    color: var(--soft-ink);
+    box-shadow: none;
+    transform: none;
+  }
+  #prototypeRoot .btn-primary {
+    background: var(--soft-accent-grad);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: var(--soft-shadow-accent);
+  }
+  #prototypeRoot .btn-primary:hover {
+    background: var(--soft-accent-grad-hover);
+    box-shadow: 0 12px 32px oklch(55% 0.2 275 / 0.45);
+  }
+  /* 发送按钮：胶囊渐变 + 紫色柔光 */
+  #prototypeRoot .btn-send {
+    background: var(--soft-accent-grad);
+    border: none; color: #fff;
+    border-radius: 999px; padding: var(--space-sm) var(--space-xl); font-weight: 700;
+    box-shadow: var(--soft-shadow-accent);
+    transition: all var(--transition-fast);
+  }
+  #prototypeRoot .btn-send:hover {
+    background: var(--soft-accent-grad-hover);
+    box-shadow: 0 14px 36px oklch(55% 0.2 275 / 0.5);
+    transform: translateY(-1px);
+  }
+  #prototypeRoot .btn-send:active { transform: scale(0.96); }
+
+  #prototypeRoot .dropzone {
+    border: 2px dashed oklch(70% 0.2 280 / 0.3);
+    background: oklch(100% 0 0 / 0.5);
+    border-radius: 18px; color: var(--soft-muted);
+    transition: all var(--transition-fast);
+  }
+  #prototypeRoot .dropzone:hover {
+    border-color: var(--soft-accent);
+    background: oklch(70% 0.2 280 / 0.08);
+  }
+  #prototypeRoot .dropzone strong { color: var(--soft-ink); }
+  #prototypeRoot .list-row { border-bottom: 1px solid oklch(25% 0.03 280 / 0.06); }
+  #prototypeRoot .chip {
+    color: var(--soft-muted);
+    background: oklch(70% 0.2 280 / 0.12);
+    border-radius: 999px;
+    border: 1px solid transparent;
+  }
+  #prototypeRoot .chip-link {
+    color: var(--soft-accent);
+    background: oklch(70% 0.2 280 / 0.15);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  #prototypeRoot .badge {
+    color: var(--soft-muted);
+    background: oklch(70% 0.2 280 / 0.12);
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  #prototypeRoot .badge-success { color: oklch(48% 0.14 145); background: oklch(60% 0.14 145 / 0.15); }
+  #prototypeRoot .badge-warning { color: oklch(52% 0.14 55); background: oklch(62% 0.14 55 / 0.15); }
+  #prototypeRoot .badge-danger { color: oklch(52% 0.18 25); background: oklch(62% 0.18 25 / 0.12); }
+  #prototypeRoot .badge-info { color: var(--soft-accent); background: oklch(70% 0.2 280 / 0.18); font-weight: 600; }
+  #prototypeRoot .progress-track {
+    background: oklch(70% 0.2 280 / 0.15);
+    border-radius: 999px;
+  }
+  #prototypeRoot .progress-fill {
+    background: var(--soft-accent-grad);
+    border-radius: 999px;
+  }
+  #prototypeRoot .assess-item { color: var(--soft-muted); }
+  #prototypeRoot .assess-item .ai-check { color: oklch(48% 0.14 145); font-weight: 700; }
+
+  /* 对话页：顶部软玻璃栏 + 居中留白 */
+  #page-interview .app-main { padding: 0; }
+  #page-interview .p-head {
+    flex: none; margin: var(--space-md) var(--space-lg) 0; padding: var(--space-md) var(--space-lg);
+    background: var(--soft-surface);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid oklch(100% 0 0 / 0.5);
+    border-radius: 16px;
+    box-shadow: var(--soft-shadow-sm);
+  }
+  #page-interview .chat-wrap { padding: var(--space-lg) var(--space-lg); }
+  #page-interview .chat-main { max-width: 660px; margin: 0 auto; }
+  #page-interview .chat-side { width: 200px; }
+  #prototypeRoot .msg { max-width: 78%; }
+  #prototypeRoot .msg .msg-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    font-size: 11px; font-weight: 700;
+  }
+  #prototypeRoot .msg-ai .msg-avatar {
+    background: var(--soft-accent-grad);
+    color: #fff;
+    box-shadow: var(--soft-shadow-sm);
+  }
+  #prototypeRoot .msg-user .msg-avatar {
+    background: oklch(85% 0.03 280);
+    color: var(--soft-ink);
+    border: 2px solid #fff;
+  }
+  #prototypeRoot .msg-bubble {
+    background: var(--soft-bubble-ai); color: var(--soft-ink);
+    border: 1px solid oklch(100% 0 0 / 0.5);
+    border-radius: 20px; border-bottom-left-radius: 6px;
+    padding: var(--space-sm) var(--space-md); font-size: 13px; line-height: 1.55;
+    box-shadow: 0 2px 8px oklch(55% 0.15 280 / 0.08);
+  }
+  #prototypeRoot .msg-user .msg-bubble {
+    background: var(--soft-accent-grad);
+    color: #fff;
+    border: none;
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 6px;
+    box-shadow: var(--soft-shadow-accent);
+  }
+  #prototypeRoot .msg-meta { color: var(--soft-faint); }
+  /* 底部输入：软玻璃胶囊栏 */
+  #prototypeRoot .chat-input-wrap {
+    border: 1px solid oklch(100% 0 0 / 0.6);
+    border-radius: 999px;
+    background: var(--soft-surface);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: var(--soft-shadow-md);
+    padding: 6px 6px 6px var(--space-lg);
+  }
+  #prototypeRoot .chat-input-wrap textarea { font-size: 13px; color: var(--soft-ink); }
+  #prototypeRoot .chat-input-wrap textarea::placeholder { color: var(--soft-faint); }
+
+  /* 弹窗：软质感（遮罩半透明紫 · 弹窗软阴影） */
+  #prototypeRoot .modal-mask {
+    background: oklch(25% 0.05 280 / 0.3);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  #prototypeRoot .modal {
+    border-radius: 22px;
+    border: 1px solid oklch(100% 0 0 / 0.5);
+    background: var(--soft-surface);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: var(--soft-shadow-lg), inset 0 1px 0 oklch(100% 0 0 / 0.6);
+  }
+  #prototypeRoot .form-field input, #prototypeRoot .form-field select {
+    border-radius: 12px;
+    border: 1px solid oklch(70% 0.2 280 / 0.2);
+    background: #fff;
+    transition: all var(--transition-fast);
+  }
+  #prototypeRoot .form-field input:focus, #prototypeRoot .form-field select:focus {
+    outline: none;
+    border-color: var(--soft-accent);
+    box-shadow: 0 0 0 3px oklch(70% 0.2 280 / 0.2);
+  }
+  #prototypeRoot .radio-chip {
+    border-radius: 12px;
+    transition: all var(--transition-fast);
+  }
+  #prototypeRoot .radio-chip.selected {
+    border-color: transparent;
+    background: var(--soft-accent-grad);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: var(--soft-shadow-sm);
+  }
+
+  /* 报告页 */
+  #prototypeRoot .score-ring::before { background: #fff; }
+  #prototypeRoot .dim-row .dim-name { color: var(--soft-muted); }
+  #prototypeRoot .dim-row .dim-track {
+    background: oklch(70% 0.2 280 / 0.15);
+    border-radius: 999px;
+  }
+  #prototypeRoot .dim-row .dim-fill {
+    background: var(--soft-accent-grad);
+    border-radius: 999px;
+  }
+
+  /* 响应式 */
+  @media (max-width: 1080px) {
+    .left-panel { flex: 0 0 40%; }
+  }
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .main-layout { flex-direction: column; height: auto; }
+    .left-panel { width: 100%; max-width: 100%; height: 460px; flex: none; }
+    .resize-handle { display: none; }
+    .right-panel { height: auto; }
+    .tab-content-wrapper { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 顶栏 ===== -->
+<header class="top-bar">
+  <div class="top-bar-left">
+    <div class="logo-mark">AI</div>
+    <span class="top-title">AI 面试官 · 产品需求文档</span>
+    <span class="version-tag">V1.0 · 2026-09-15</span>
+  </div>
+  <div class="mode-toggle" role="tablist" aria-label="视图切换">
+    <button type="button" class="mode-btn active" id="modePreviewBtn">原型预览</button>
+    <button type="button" class="mode-btn" id="modeTextBtn">文档视图</button>
+  </div>
+</header>
+
+<!-- ===== 主布局 ===== -->
+<div class="main-layout" id="mainLayout">
+
+  <!-- 左：浏览器原型 -->
+  <aside class="left-panel" id="leftPanel">
+    <div class="browser-frame" id="browserFrame">
+      <div class="browser-toolbar">
+        <div class="browser-dots" aria-hidden="true"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+        <div class="browser-address" id="addressBar">ai-interviewer.app/interview/sessions</div>
+      </div>
+      <div class="browser-screen" id="prototypeRoot">
+
+        <!-- ========== 页面：会话列表 ========== -->
+        <div class="page active" id="page-home">
+          <div class="app-shell">
+            <nav class="app-sidebar" aria-label="原型主导航">
+              <div class="app-logo"><span class="logo-badge">AI</span>AI 面试官</div>
+              <div class="app-nav">
+                <button type="button" class="app-nav-item active" data-link="feature-session" onclick="navigate('page-home')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>面试对话
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-resume" onclick="navigate('page-resume')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>简历管理
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-kb" onclick="navigate('page-kb')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>知识库
+                </button>
+              </div>
+              <div class="session-side">
+                <div class="session-side-title">最近会话</div>
+                <div class="session-side-item" data-link="feature-interview" onclick="navigate('page-interview')">
+                  <span class="ss-dot" style="background:var(--soft-accent)"></span><span class="ss-title">前端工程师 · 技术面</span><span class="ss-meta">进行中</span>
+                </div>
+                <div class="session-side-item" onclick="navigate('page-report')">
+                  <span class="ss-dot" style="background:var(--soft-faint)"></span><span class="ss-title">产品经理 · 行为面</span><span class="ss-meta">已完成</span>
+                </div>
+              </div>
+              <div style="margin-top:auto;padding:8px 10px;border-top:1px solid var(--border-color);">
+                <button type="button" class="app-nav-item" data-link="feature-config" onclick="navigate('page-config')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>环境配置
+                  <span class="ss-meta cfg-status" style="margin-left:auto;color:var(--warning);font-weight:600;">未配置</span>
+                </button>
+              </div>
+            </nav>
+            <main class="app-main" data-link="feature-session">
+              <div class="p-head">
+                <h3>面试会话</h3>
+                <button type="button" class="btn btn-primary" onclick="openModal()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新建面试
+                </button>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <span class="chip" style="color:var(--soft-accent);background:oklch(70% 0.2 280 / 0.15);border-color:transparent;font-weight:600;">全部</span>
+                <span class="chip">进行中</span><span class="chip">已完成</span>
+              </div>
+              <div class="session-card" data-link="feature-session" onclick="navigate('page-interview')">
+                <div class="sc-main">
+                  <div class="sc-title">前端工程师 · 技术面 <span class="badge badge-warning">进行中</span> <span class="chip">全职</span></div>
+                  <div class="sc-meta"><span>今天 14:30</span><span>5 条消息</span><span>第 2 / 10 题</span></div>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" onclick="navigate('page-interview')">继续面试</button>
+              </div>
+              <div class="session-card" onclick="navigate('page-report')">
+                <div class="sc-main">
+                  <div class="sc-title">产品经理 · 行为面 <span class="badge badge-success">已完成</span> <span class="chip">实习</span></div>
+                  <div class="sc-meta"><span>昨天 20:10</span><span>12 条消息</span><span>10 题已答完</span></div>
+                </div>
+                <button type="button" class="btn btn-sm" onclick="navigate('page-report')">查看报告</button>
+              </div>
+            </main>
+          </div>
+        </div>
+
+        <!-- ========== 页面：面试对话 ========== -->
+        <div class="page" id="page-interview">
+          <div class="app-shell">
+            <nav class="app-sidebar" aria-label="原型主导航">
+              <div class="app-logo"><span class="logo-badge">AI</span>AI 面试官</div>
+              <div class="app-nav">
+                <button type="button" class="app-nav-item active" data-link="feature-session" onclick="navigate('page-home')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>面试对话
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-resume" onclick="navigate('page-resume')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>简历管理
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-kb" onclick="navigate('page-kb')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>知识库
+                </button>
+              </div>
+              <div class="session-side">
+                <div class="session-side-title">最近会话</div>
+                <div class="session-side-item active">
+                  <span class="ss-dot" style="background:var(--soft-accent)"></span><span class="ss-title">前端工程师 · 技术面</span><span class="ss-meta">进行中</span>
+                </div>
+              </div>
+              <div style="margin-top:auto;padding:8px 10px;border-top:1px solid var(--border-color);">
+                <button type="button" class="app-nav-item" data-link="feature-config" onclick="navigate('page-config')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>环境配置
+                  <span class="ss-meta cfg-status" style="margin-left:auto;color:var(--warning);font-weight:600;">未配置</span>
+                </button>
+              </div>
+            </nav>
+            <main class="app-main" data-link="feature-interview" style="padding:16px 20px;display:flex;flex-direction:column;overflow:hidden;">
+              <div class="p-head" style="flex:none;">
+                <button type="button" class="btn btn-sm btn-ghost" onclick="navigate('page-home')">← 返回</button>
+                <h3>前端工程师 · 技术面</h3>
+                <span class="chip">全职 · 常规</span>
+                <span class="badge badge-warning">进行中</span>
+                <div class="progress-track" title="第 2 / 10 题"><div class="progress-fill"></div></div>
+                <span style="font-size:12px;color:var(--text-muted);flex:none;">第 2 / 10 题</span>
+                <button type="button" class="btn btn-sm" onclick="endInterview()">结束面试</button>
+              </div>
+              <div class="chat-wrap" style="flex:1;min-height:0;">
+                <div class="chat-main">
+                  <div class="chat-list" id="chatList">
+                    <div class="msg msg-ai">
+                      <div class="msg-avatar">AI</div>
+                      <div>
+                        <div class="msg-bubble">你好，我是今天的面试官。先简单介绍一下你自己，重点讲一个你最近负责的项目。</div>
+                        <div class="msg-meta"><span>09:41</span><span class="chip chip-link" data-link="feature-kb">知识库 · JD-前端工程师.docx 第 3 段</span></div>
+                      </div>
+                    </div>
+                    <div class="msg msg-user">
+                      <div class="msg-avatar">我</div>
+                      <div>
+                        <div class="msg-bubble">您好，我最近在做 mock-interview-agent 这个项目，一个基于大模型的模拟面试平台。我负责 RAG 检索链路和 LangGraph 面试流程编排。</div>
+                        <div class="msg-meta"><span>09:43</span></div>
+                      </div>
+                    </div>
+                    <div class="msg msg-ai">
+                      <div class="msg-avatar">AI</div>
+                      <div>
+                        <div class="msg-bubble">这个项目里，你采用了 Qdrant 和 Elasticsearch 双路召回。为什么需要两条检索路线？各自的定位是什么？</div>
+                        <div class="msg-meta"><span>09:43</span><span class="chip chip-link" data-link="feature-kb">知识库 · 系统设计手册.pdf 第 12 段</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="chat-input-wrap">
+                    <textarea id="chatInput" rows="1" placeholder="输入你的回答，Enter 发送"></textarea>
+                    <div class="chat-input-actions">
+                      <button type="button" class="btn btn-sm btn-ghost" onclick="hintAction()">提示一下</button>
+                      <button type="button" class="btn btn-sm btn-ghost" onclick="skipAction()">跳过此题</button>
+                      <div class="spacer"></div>
+                      <button type="button" class="btn btn-sm btn-send" onclick="sendMessage()">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>发送
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="chat-side">
+                  <div class="p-card">
+                    <div class="p-card-title">本轮评估要点</div>
+                    <div class="assess-item"><span class="ai-check">✓</span>技术深度：双路召回选型</div>
+                    <div class="assess-item"><span class="ai-check">✓</span>工程落地：向量与全文索引</div>
+                    <div class="assess-item"><span style="color:var(--text-faint)">○</span>表达清晰：STAR 结构</div>
+                    <div class="assess-item"><span style="color:var(--text-faint)">○</span>结果量化：性能数据</div>
+                  </div>
+                  <div class="p-card">
+                    <div class="p-card-title">会话信息</div>
+                    <div class="assess-item">面试官模型：DeepSeek</div>
+                    <div class="assess-item">面试场景：全职 · 常规难度</div>
+                    <div class="assess-item">知识库：已关联（2 份文档）</div>
+                    <div class="assess-item" style="color:var(--text-faint)">简历关联：[P2]</div>
+                  </div>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+
+        <!-- ========== 页面：简历管理 ========== -->
+        <div class="page" id="page-resume">
+          <div class="app-shell">
+            <nav class="app-sidebar" aria-label="原型主导航">
+              <div class="app-logo"><span class="logo-badge">AI</span>AI 面试官</div>
+              <div class="app-nav">
+                <button type="button" class="app-nav-item" data-link="feature-session" onclick="navigate('page-home')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>面试对话
+                </button>
+                <button type="button" class="app-nav-item active" data-link="feature-resume" onclick="navigate('page-resume')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>简历管理
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-kb" onclick="navigate('page-kb')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>知识库
+                </button>
+              </div>
+              <div style="margin-top:auto;padding:8px 10px;border-top:1px solid var(--border-color);">
+                <button type="button" class="app-nav-item" data-link="feature-config" onclick="navigate('page-config')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>环境配置
+                  <span class="ss-meta cfg-status" style="margin-left:auto;color:var(--warning);font-weight:600;">未配置</span>
+                </button>
+              </div>
+            </nav>
+            <main class="app-main" data-link="feature-resume">
+              <div class="p-head"><h3>简历管理</h3></div>
+              <div class="dropzone" id="resumeDropzone" onclick="uploadResume()">
+                <strong>拖拽或点击上传简历</strong>
+                支持 PDF / Word，单个文件 ≤ 20MB [P2]
+              </div>
+              <div id="resumeParsing" style="display:none;" class="p-card">
+                <div class="p-card-title">简历-B.pdf <span class="badge badge-info">解析中…</span></div>
+                <div class="progress-track"><div class="progress-fill" style="width:60%"></div></div>
+              </div>
+              <div id="resumeResult" style="display:none;">
+                <div class="p-card">
+                  <div class="p-card-title">陈某某 <span class="badge badge-success">解析成功</span> <span class="badge badge-gray">目标岗位：前端工程师</span></div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+                    <span class="chip">Vue 3</span><span class="chip">TypeScript</span><span class="chip">LangChain</span><span class="chip">FastAPI</span><span class="chip">Elasticsearch</span>
+                  </div>
+                  <div class="list-row"><div class="lr-main"><div class="lr-title">项目：AI 面试官（RAG 检索链路 / LangGraph 编排）</div><div class="lr-sub">2026.01 – 至今 · 负责人</div></div></div>
+                  <div class="list-row"><div class="lr-main"><div class="lr-title">教育：某某大学 · 计算机科学与技术 · 本科</div><div class="lr-sub">2021 – 2025</div></div></div>
+                  <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+                    <button type="button" class="btn btn-sm btn-primary" onclick="generateQuestions()">生成面试题库</button>
+                    <span id="questionGenResult" style="display:none;font-size:12px;color:var(--success);font-weight:600;">已生成 12 道个性化题目 ✓</span>
+                  </div>
+                </div>
+                <div class="p-card" style="border-color:oklch(50% 0.16 25 / 0.3);">
+                  <div class="p-card-title">简历-B.pdf <span class="badge badge-danger">解析失败</span></div>
+                  <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px;">原因：扫描件无文字层，无法提取文本（建议使用可复制的 PDF）</div>
+                  <button type="button" class="btn btn-sm">重新上传</button>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+
+        <!-- ========== 页面：知识库 ========== -->
+        <div class="page" id="page-kb">
+          <div class="app-shell">
+            <nav class="app-sidebar" aria-label="原型主导航">
+              <div class="app-logo"><span class="logo-badge">AI</span>AI 面试官</div>
+              <div class="app-nav">
+                <button type="button" class="app-nav-item" data-link="feature-session" onclick="navigate('page-home')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>面试对话
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-resume" onclick="navigate('page-resume')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>简历管理
+                </button>
+                <button type="button" class="app-nav-item active" data-link="feature-kb" onclick="navigate('page-kb')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>知识库
+                </button>
+              </div>
+              <div style="margin-top:auto;padding:8px 10px;border-top:1px solid var(--border-color);">
+                <button type="button" class="app-nav-item" data-link="feature-config" onclick="navigate('page-config')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>环境配置
+                  <span class="ss-meta cfg-status" style="margin-left:auto;color:var(--warning);font-weight:600;">未配置</span>
+                </button>
+              </div>
+            </nav>
+            <main class="app-main" data-link="feature-kb">
+              <div class="p-head"><h3>知识库</h3></div>
+              <div class="dropzone" id="kbDropzone" onclick="uploadDoc()">
+                <strong>拖拽或点击上传知识文档</strong>
+                支持 PDF / Word / Markdown，单个文件 ≤ 50MB [P1]
+              </div>
+              <div class="p-card" style="padding:8px 16px;">
+                <div class="list-row">
+                  <div class="lr-main"><div class="lr-title">JD-前端工程师.docx</div><div class="lr-sub">DOCX · 12 块</div></div>
+                  <span class="badge badge-success">已就绪</span>
+                  <button type="button" class="btn btn-sm btn-ghost">查看</button>
+                  <button type="button" class="btn btn-sm btn-ghost" style="color:var(--danger)">删除</button>
+                </div>
+                <div class="list-row">
+                  <div class="lr-main"><div class="lr-title">Vue3 最佳实践.md</div><div class="lr-sub">MD · 34 块</div></div>
+                  <span class="badge badge-success">已就绪</span>
+                  <button type="button" class="btn btn-sm btn-ghost">查看</button>
+                  <button type="button" class="btn btn-sm btn-ghost" style="color:var(--danger)">删除</button>
+                </div>
+                <div class="list-row" id="kbDocRow" style="display:none;">
+                  <div class="lr-main"><div class="lr-title">系统设计手册.pdf</div><div class="lr-sub">PDF · <span id="kbDocState">解析中…</span></div></div>
+                  <span class="badge badge-info" id="kbDocBadge">解析中…</span>
+                </div>
+                <div class="list-row">
+                  <div class="lr-main"><div class="lr-title">面试题库整理.pdf</div><div class="lr-sub">PDF · 48 块</div></div>
+                  <span class="badge badge-warning">向量化中…</span>
+                </div>
+              </div>
+              <div class="p-card">
+                <div class="p-card-title">检索设置 [P1]</div>
+                <div style="font-size:12.5px;margin-bottom:8px;">双路召回权重：语义（Qdrant）<span id="semVal">0.7</span> / 关键词（ES）<span id="kwVal">0.3</span></div>
+                <input type="range" min="0" max="1" step="0.05" value="0.7" style="width:100%;accent-color:var(--soft-accent);" oninput="semSlider(this.value)">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Top-K：5 · 命中子块时返回父块作为上下文</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Embedding：本地 bge-large-zh-v1.5（1024 维）· 切换模型需重建索引</div>
+              </div>
+            </main>
+          </div>
+        </div>
+
+        <!-- ========== 页面：面试报告 ========== -->
+        <div class="page" id="page-report">
+          <div class="app-shell">
+            <nav class="app-sidebar" aria-label="原型主导航">
+              <div class="app-logo"><span class="logo-badge">AI</span>AI 面试官</div>
+              <div class="app-nav">
+                <button type="button" class="app-nav-item" data-link="feature-session" onclick="navigate('page-home')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>面试对话
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-resume" onclick="navigate('page-resume')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>简历管理
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-kb" onclick="navigate('page-kb')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>知识库
+                </button>
+              </div>
+              <div style="margin-top:auto;padding:8px 10px;border-top:1px solid var(--border-color);">
+                <button type="button" class="app-nav-item" data-link="feature-config" onclick="navigate('page-config')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>环境配置
+                  <span class="ss-meta cfg-status" style="margin-left:auto;color:var(--warning);font-weight:600;">未配置</span>
+                </button>
+              </div>
+            </nav>
+            <main class="app-main" data-link="feature-report">
+              <div class="p-head"><h3>面试报告 · 前端工程师（技术面）</h3><span class="badge badge-success">已生成</span></div>
+              <div class="p-card" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+                <div class="score-ring" style="background:conic-gradient(var(--soft-accent) 0 82%, var(--soft-bg) 82% 100%);">
+                  <div style="text-align:center;"><div class="sr-num">82</div><div class="sr-total">总分 / 100</div></div>
+                </div>
+                <div style="flex:1;min-width:200px;">
+                  <div class="dim-row"><span class="dim-name">技术深度</span><div class="dim-track"><div class="dim-fill" style="width:85%"></div></div><span class="dim-val">85</span></div>
+                  <div class="dim-row"><span class="dim-name">沟通表达</span><div class="dim-track"><div class="dim-fill" style="width:78%"></div></div><span class="dim-val">78</span></div>
+                  <div class="dim-row"><span class="dim-name">逻辑思维</span><div class="dim-track"><div class="dim-fill" style="width:80%"></div></div><span class="dim-val">80</span></div>
+                  <div class="dim-row"><span class="dim-name">项目经验</span><div class="dim-track"><div class="dim-fill" style="width:88%"></div></div><span class="dim-val">88</span></div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div class="p-card">
+                  <div class="p-card-title" style="color:var(--success)">✓ 优点</div>
+                  <ul style="font-size:12.5px;padding-left:18px;margin:0;">
+                    <li style="margin-bottom:6px;">对 RAG 双路召回的技术选型有清晰认知，能讲清语义与关键词检索的定位差异</li>
+                    <li style="margin-bottom:6px;">项目叙述有结构，能主动说明职责边界</li>
+                  </ul>
+                </div>
+                <div class="p-card">
+                  <div class="p-card-title" style="color:var(--warning)">△ 待改进</div>
+                  <ul style="font-size:12.5px;padding-left:18px;margin:0;">
+                    <li style="margin-bottom:6px;">行为面回答缺少 STAR 结构，结果量化不足（建议补充性能数据）</li>
+                    <li style="margin-bottom:6px;">追问环节偶有停顿，建议提前准备 2 个失败案例</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="p-card">
+                <div class="p-card-title">关键问题回顾</div>
+                <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+                  <tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-color);">问题</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-color);">参考要点</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-color);">校验</th></tr>
+                  <tr><td style="padding:6px 8px;border-bottom:1px solid var(--border-color);">双路召回为何需要 ES？</td><td style="padding:6px 8px;border-bottom:1px solid var(--border-color);">关键词精确匹配、专有名词兜底</td><td style="padding:6px 8px;border-bottom:1px solid var(--border-color);"><span class="badge badge-success">已核验</span></td></tr>
+                  <tr><td style="padding:6px 8px;">bge-large-zh-v1.5 的定位？</td><td style="padding:6px 8px;">中文语义向量，768 维</td><td style="padding:6px 8px;"><span class="badge badge-warning">存疑 · <a style="color:var(--info);" href="#">web[url]</a></span></td></tr>
+                </table>
+                <div style="font-size:11.5px;color:var(--text-faint);margin-top:6px;">含事实性陈述的回答已触发 web_verify 校验（[P2] 可选节点）</div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button type="button" class="btn btn-primary" onclick="navigate('page-home')">再来一场</button>
+                <button type="button" class="btn">导出报告</button>
+              </div>
+            </main>
+          </div>
+        </div>
+
+        <!-- ========== 页面：环境配置 ========== -->
+        <div class="page" id="page-config">
+          <div class="app-shell">
+            <nav class="app-sidebar" aria-label="原型主导航">
+              <div class="app-logo"><span class="logo-badge">AI</span>AI 面试官</div>
+              <div class="app-nav">
+                <button type="button" class="app-nav-item" data-link="feature-session" onclick="navigate('page-home')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>面试对话
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-resume" onclick="navigate('page-resume')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>简历管理
+                </button>
+                <button type="button" class="app-nav-item" data-link="feature-kb" onclick="navigate('page-kb')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>知识库
+                </button>
+              </div>
+              <div style="margin-top:auto;padding:8px 10px;border-top:1px solid var(--border-color);">
+                <button type="button" class="app-nav-item active" data-link="feature-config" onclick="navigate('page-config')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>环境配置
+                  <span class="ss-meta cfg-status" style="margin-left:auto;color:var(--warning);font-weight:600;">未配置</span>
+                </button>
+              </div>
+            </nav>
+            <main class="app-main" data-link="feature-config">
+              <div class="p-head"><h3>环境配置</h3></div>
+              <div class="p-card">
+                <div class="p-card-title">LLM API Key（DeepSeek）<span style="color:var(--danger);font-size:11px;font-weight:400;">必填</span></div>
+                <div style="display:flex;gap:8px;margin-bottom:6px;">
+                  <input type="password" value="sk-••••••••••••••••8f2a" style="flex:1;border:1px solid var(--border-color);border-radius:8px;padding:7px 10px;font-size:12.5px;">
+                  <button type="button" class="btn btn-sm">显示</button>
+                </div>
+                <div style="font-size:11.5px;color:var(--text-muted);">已配置 · 掩码显示（保留后 4 位），不回显明文</div>
+              </div>
+              <div class="p-card">
+                <div class="p-card-title">Embedding 服务 <span class="badge badge-gray">[P1] 可选</span></div>
+                <div class="radio-row" style="margin-bottom:6px;">
+                  <div class="radio-chip selected" onclick="pickEmbed(this,'local')">本地 bge-large-zh-v1.5</div>
+                  <div class="radio-chip" onclick="pickEmbed(this,'api')">外部 API</div>
+                </div>
+                <input type="text" placeholder="外部 API 需填 Base URL / Key；本地模型可留空" style="width:100%;border:1px solid var(--border-color);border-radius:8px;padding:7px 10px;font-size:12.5px;">
+                <div id="embedHint" style="font-size:11.5px;color:var(--text-muted);margin-top:6px;">本地模型，知识内容不出本机；切换模型需重建索引</div>
+              </div>
+              <div class="p-card">
+                <div class="p-card-title">联网搜索 API Key（Tavily / SerpAPI）<span class="badge badge-gray">[P2]</span></div>
+                <input type="password" placeholder="用于 web_verify 事实校验" style="width:100%;border:1px solid var(--border-color);border-radius:8px;padding:7px 10px;font-size:12.5px;">
+                <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;">未配置时，事实校验结果标记为「无法确认」</div>
+              </div>
+              <div class="p-card" style="border-left:3px solid var(--info);">
+                <div style="font-size:12.5px;color:var(--text-muted);">Key 仅保存于后端本地运行时配置（gitignore），不入版本库；不会回显明文。</div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button type="button" class="btn" onclick="testConfig()">测试连接</button>
+                <button type="button" class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+                <span id="configMsg" style="display:none;font-size:12px;color:var(--success);font-weight:600;"></span>
+              </div>
+            </main>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 新建面试弹窗 -->
+    <div class="modal-mask" id="newSessionModal">
+      <div class="modal" role="dialog" aria-label="新建面试">
+        <h4>新建面试</h4>
+        <div class="form-field">
+          <label>面试场景</label>
+          <div class="radio-row">
+            <div class="radio-chip" onclick="pickScene(this,'实习')">实习</div>
+            <div class="radio-chip selected" onclick="pickScene(this,'全职')">全职</div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:5px;">实习面试难度偏低：基础概念与项目介绍为主，不深挖底层原理</div>
+        </div>
+        <div class="form-field">
+          <label>面试类型</label>
+          <div class="radio-row">
+            <div class="radio-chip selected" onclick="pickType(this,'技术面')">技术面</div>
+            <div class="radio-chip" onclick="pickType(this,'行为面')">行为面</div>
+            <div class="radio-chip" onclick="pickType(this,'综合')">综合</div>
+          </div>
+        </div>
+        <div class="form-field"><label>岗位方向</label><input type="text" value="前端工程师" placeholder="如：前端工程师、后端开发、产品经理"></div>
+        <div class="form-field"><label>关联知识库（可选）[P1]</label><select><option selected>JD-前端工程师.docx（12 块）</option><option>不使用知识库</option></select></div>
+        <div class="form-field"><label>关联简历（可选）[P2]</label><select><option selected>陈某某 · 前端工程师</option><option>未上传简历</option></select></div>
+        <div class="form-field"><label>题目数量（默认 10，范围 5–30）</label><input type="number" value="10" min="5" max="30"></div>
+        <div class="modal-foot">
+          <button type="button" class="btn" onclick="closeModal()">取消</button>
+          <button type="button" class="btn btn-primary" onclick="startSession()">开始面试</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="resize-handle" id="resizeHandle" role="separator" aria-orientation="vertical"></div>
+  </aside>
+
+  <!-- 右：PRD 文档 -->
+  <section class="right-panel">
+    <nav class="tab-bar" id="tabBar" aria-label="PRD 章节">
+      <button type="button" class="tab-btn active" data-tab="tab-overview">概览</button>
+      <button type="button" class="tab-btn" data-tab="tab-design">产品设计</button>
+      <button type="button" class="tab-btn" data-tab="tab-detail">需求详情</button>
+      <button type="button" class="tab-btn" data-tab="tab-rules">规则</button>
+      <button type="button" class="tab-btn" data-tab="tab-acceptance">验收标准</button>
+    </nav>
+
+    <div class="tab-content-wrapper" id="tabContentWrapper">
+
+      <!-- ===== 概览 ===== -->
+      <div class="tab-pane active" id="tab-overview">
+        <div class="pane-inner">
+          <div class="ov-hero">
+            <h3>一句话定位</h3>
+            <p>AI 基于用户上传的「简历 + 知识集」进行多轮模拟面试：扮演面试官逐题深挖、逐轮反馈，面试结束生成结构化评估报告，并支持历史会话与断点续聊。</p>
+          </div>
+
+          <h3>需求背景</h3>
+          <p><strong>[PM judgment]</strong> 求职者面试准备存在三个痛点：</p>
+          <ul>
+            <li><strong>缺乏真实反馈</strong>：自我练习无法判断回答质量，也不知道面试官会往哪个方向追问。</li>
+            <li><strong>练习与个人情况脱节</strong>：通用面试题与自己的简历项目、目标岗位 JD 对不上，练不到点子上。</li>
+            <li><strong>复盘成本高</strong>：面试后缺少结构化评估，改进方向不明确。</li>
+          </ul>
+          <p><strong>[Research-backed]</strong> 大模型 + RAG 技术栈已成熟（DeepSeek、bge 中文向量、Qdrant、Elasticsearch），可用较低成本构建「简历/知识库驱动的个性化面试官」，这是本产品的技术窗口。</p>
+
+          <h3>产品目标</h3>
+          <ul>
+            <li>让用户获得与真实面试相近的练习体验：<strong>问题个性化</strong>（基于简历 + 知识库）、<strong>反馈即时</strong>（逐轮追问与点评）、<strong>复盘结构化</strong>（评分报告）。</li>
+            <li>量化基线（上线后抽测）：面试完成率 ≥ 80%；用户对「问题与自身情况相关性」的评分 ≥ 4/5。</li>
+          </ul>
+
+          <h3>目标用户与核心场景</h3>
+          <ul>
+            <li><strong>场景 1 · 针对性模拟</strong>：用户上传简历与目标岗位 JD / 技术文档 → 新建「技术面」→ AI 围绕简历项目深挖，结合 JD 出题，回答后自动追问。</li>
+            <li><strong>场景 2 · 随时续聊</strong>：面试中途离开，稍后回到会话列表继续上一次面试，上下文不丢。</li>
+            <li><strong>场景 3 · 复盘改进</strong>：面试结束查看评分报告与关键问题回顾，事实性陈述附信源校验（web_verify）。</li>
+          </ul>
+
+          <h3>范围与分期</h3>
+          <table class="phase-table">
+            <tr><th style="width:80px;">阶段</th><th>交付范围</th><th style="width:120px;">退出条件</th></tr>
+            <tr>
+              <td><span class="phase-tag tag-p0">P0</span></td>
+              <td>会话管理 + 基础面试对话（含实习/全职场景与难度差异）+ 环境配置（LLM Key）+ SSE 流式输出 + 内存断点续聊</td>
+              <td>P0 验收通过</td>
+            </tr>
+            <tr>
+              <td><span class="phase-tag tag-p1">P1</span></td>
+              <td>知识库入库（Docling → 父子切块 → Qdrant + ES 双路召回）+ RAG 检索问答 + 四级降级</td>
+              <td>P1 验收通过</td>
+            </tr>
+            <tr>
+              <td><span class="phase-tag tag-p2">P2</span></td>
+              <td>简历解析 + 题库构建 + 简历驱动出题 + SqliteSaver 跨重启持久化 + 可选 web_verify 事实校验</td>
+              <td>P2 验收通过</td>
+            </tr>
+          </table>
+          <div class="callout callout-info">
+            <span class="co-icon">ℹ️</span>
+            <div><strong>本期不包含：</strong>多人/群面、语音与视频面试、简历批量筛选、对外付费与账号体系。如需这些能力，请提出后单独规划。</div>
+          </div>
+
+          <h3>项目边界（2026-09-15 确认）</h3>
+          <table>
+            <tr><th style="width:130px;">边界项</th><th>约定</th></tr>
+            <tr><td>部署形态</td><td>单机本地使用：后端绑定 127.0.0.1，无账号鉴权，无跨机 CORS 暴露</td></tr>
+            <tr><td>数据生命周期</td><td>删除即物理删：会话 / 简历 / 知识库文档删除时，SQLite、Qdrant、ES 三处存储同步删除，不留副本</td></tr>
+            <tr><td>并发边界</td><td>同一会话同一时刻仅一个进行中的流式回复（见 R6）；跨会话全局单流式：同时仅一个会话可流式回复，其余排队</td></tr>
+            <tr><td>单用户模型</td><td>无多用户隔离、无权限分级，所有数据视为同一用户所有</td></tr>
+            <tr><td>API Key 存储</td><td>明文 .env（gitignore 排除）+ python-dotenv；日志与前端展示一律掩码（sk-•••）</td></tr>
+          </table>
+
+          <h3>技术方案（已确认）</h3>
+          <table>
+            <tr><th style="width:120px;">层</th><th>选型</th><th>说明</th></tr>
+            <tr><td>前端</td><td>Vue 3 + Vite</td><td>对话页 SSE 流式渲染</td></tr>
+            <tr><td>后端</td><td>FastAPI + SSE</td><td>流式对话接口</td></tr>
+            <tr><td>LLM / Embedding</td><td>DeepSeek / bge-large-zh-v1.5</td><td>langchain-deepseek / langchain-huggingface</td></tr>
+            <tr><td>编排</td><td>LangGraph</td><td>出题 / 评估 / 追问节点 + InterviewState</td></tr>
+            <tr><td>知识检索</td><td>Qdrant + Elasticsearch</td><td>子块向量（语义）+ 父块全文（ik 分词），P1 起双路召回</td></tr>
+            <tr><td>分词</td><td>jieba</td><td>中文分词，配合 ES ik 检索（P1 用）</td></tr>
+            <tr><td>会话持久化</td><td>SqliteSaver（interview.db）</td><td>P0 用 MemorySaver，P2 换 SqliteSaver，thread_id 分会话</td></tr>
+            <tr><td>简历存储</td><td>文件系统 / SQLite blob</td><td>暂不上 MySQL，批量筛候选人时再升级</td></tr>
+            <tr><td>文档解析</td><td>langchain-docling</td><td>多模态 PDF / Word / Markdown</td></tr>
+            <tr><td>工程</td><td>uv + ruff + pre-commit + loguru + omegaconf + python-dotenv + pytest</td><td>Key 明文存 .env（gitignore）；pytest 用于自动化验收；复用 shopkeeper-agent 基建</td></tr>
+          </table>
+
+          <h3>存储三块划分</h3>
+          <table>
+            <tr><th style="width:130px;">数据</th><th>存储位置</th><th>说明</th></tr>
+            <tr><td>对话历史 / 会话状态</td><td>LangGraph <code>SqliteSaver</code>（interview.db）</td><td>thread_id 分会话；P0 用 MemorySaver（后端重启丢失并提示），P2 换 SqliteSaver</td></tr>
+            <tr><td>简历</td><td>文件系统 / SQLite blob</td><td>P2 起接入，暂不升级 MySQL</td></tr>
+            <tr><td>知识集</td><td>Qdrant + Elasticsearch</td><td>子块向量入 Qdrant、块正文入 ES（ik 分词），P1 起</td></tr>
+          </table>
+
+          <h3>名词表</h3>
+          <table>
+            <tr><th style="width:140px;">名词</th><th>定义</th></tr>
+            <tr><td>面试场景</td><td>实习 / 全职：决定出题与追问深度（实习偏基础概念与项目介绍，不深挖底层原理）</td></tr>
+            <tr><td>环境配置</td><td>用户自配 API（LLM / Embedding / 联网搜索），Key 存后端本地运行时配置，不入版本库</td></tr>
+            <tr><td>会话 / thread_id</td><td>一次面试 = 一个会话；后端以 thread_id 隔离状态与消息</td></tr>
+            <tr><td>知识库</td><td>用户上传的文档集合（JD、技术文档、项目资料），用于驱动出题与回答</td></tr>
+            <tr><td>父子切块</td><td>文档切块两级：子块（2–3 句）入向量库检索；父块（段落）作为返回上下文</td></tr>
+            <tr><td>双路召回</td><td>ES 关键词（BM25）与 Qdrant 语义（向量）同时检索，合并去重后按权重重排</td></tr>
+            <tr><td>四级降级</td><td>normal / weak / fallback / decline，知识不足时的回答降级策略</td></tr>
+            <tr><td>web_verify</td><td>[P2 可选] 对事实性回答做联网校验，标注相关 / 冲突 / 无法确认并附信源</td></tr>
+            <tr><td>SSE</td><td>Server-Sent Events，服务端向浏览器逐 token 推送回复</td></tr>
+          </table>
+
+          <div class="callout callout-warning">
+            <span class="co-icon">⚠️</span>
+            <div><strong>已确认（2026-09-16）：</strong>产品名「AI 面试官」；题目数量默认 10（5–30）；每题提示 1 次；实习 / 全职追问同轮次（1–2 轮），难度差异靠题目本身；LLM Key <code>sk-</code> 前缀校验；Key 变更后新会话生效、进行中会话沿用旧 Key；报告导出 Markdown；Embedding 模型可配置（本地 bge-large-zh-v1.5 / 外部 API），知识库绑定 model_id，切换需重建索引，外部 API 加数据外发提示。<strong>待确认（P1 启用）：</strong>降级相关性阈值（默认 0.6）。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 产品设计 ===== -->
+      <div class="tab-pane" id="tab-design">
+        <div class="pane-inner">
+          <h2>产品设计</h2>
+          <p class="pane-sub">信息架构与核心流程。原型为可交互演示，可切到「原型预览」页操作。</p>
+
+          <h3>信息架构</h3>
+          <div class="ov-grid">
+            <div class="ov-metric"><div class="ov-label">模块</div><div class="ov-num" style="font-size:16px;">面试对话</div><div class="ov-label" style="margin-top:4px;">会话列表 / 对话 / 报告</div></div>
+            <div class="ov-metric"><div class="ov-label">模块</div><div class="ov-num" style="font-size:16px;">简历管理</div><div class="ov-label" style="margin-top:4px;">上传 / 解析 / 题库</div></div>
+            <div class="ov-metric"><div class="ov-label">模块</div><div class="ov-num" style="font-size:16px;">知识库</div><div class="ov-label" style="margin-top:4px;">上传 / 切块 / 检索设置</div></div>
+            <div class="ov-metric"><div class="ov-label">模块</div><div class="ov-num" style="font-size:16px;">环境配置</div><div class="ov-label" style="margin-top:4px;">LLM / Embedding / 搜索 Key</div></div>
+          </div>
+
+          <h3>流程 1 · 面试主流程（P0 基础，P1/P2 增强）</h3>
+          <div class="flow">
+            <div class="flow-label">用户操作 → 系统响应</div>
+            <div class="flow-node hot">新建会话<br><span style="font-weight:400;font-size:11px;">场景 / 类型 / 岗位 / 知识库 / 简历</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">AI 出题<br><span style="font-weight:400;font-size:11px;">P1 引用知识库 · P2 简历深挖</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">用户回答<br><span style="font-weight:400;font-size:11px;">SSE 流式</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">AI 追问 / 点评<br><span style="font-weight:400;font-size:11px;">1–2 轮后换题</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node dim">循环至全部题目<br><span style="font-weight:400;font-size:11px;">或用户主动结束</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">生成报告<br><span style="font-weight:400;font-size:11px;">评分 + 问题回顾</span></div>
+          </div>
+
+          <h3>流程 2 · 检索与四级降级（P1）</h3>
+          <div class="flow" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <div class="flow-node hot" style="align-self:center;">用户提问</div>
+            <div class="flow-node" style="align-self:center;">意图判定：是否需要知识检索？</div>
+            <div class="flow-node" style="align-self:center;">双路召回：ES 关键词（BM25） + Qdrant 语义（bge） → 合并去重 → Top-K 重排</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+              <div class="flow-node" style="border-color:var(--success);background:var(--success-bg);color:oklch(45% 0.12 145);">normal<br><span style="font-weight:400;font-size:11px;">强相关：基于知识回答 + 引用</span></div>
+              <div class="flow-node" style="border-color:var(--warning);background:var(--warning-bg);color:var(--warning);">weak<br><span style="font-weight:400;font-size:11px;">部分相关：弱引用 + 提示信息有限</span></div>
+              <div class="flow-node dim">fallback<br><span style="font-weight:400;font-size:11px;">无相关：通用面试题回答</span></div>
+              <div class="flow-node" style="border-color:var(--danger);background:var(--danger-bg);color:var(--danger);">decline<br><span style="font-weight:400;font-size:11px;">连续 fallback ≥ 2：建议补充知识库</span></div>
+            </div>
+          </div>
+
+          <h3>流程 3 · 简历驱动面试（P2）</h3>
+          <div class="flow">
+            <div class="flow-node">上传简历<br><span style="font-weight:400;font-size:11px;">PDF / Word ≤ 20MB</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">Docling 解析<br><span style="font-weight:400;font-size:11px;">多模态提取</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">结构化抽取<br><span style="font-weight:400;font-size:11px;">教育 / 经历 / 项目 / 技能</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node hot">题库构建<br><span style="font-weight:400;font-size:11px;">≥ 10 题个性化</span></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">面试出题引用<br><span style="font-weight:400;font-size:11px;">项目深挖 + web_verify 校验</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 需求详情 ===== -->
+      <div class="tab-pane" id="tab-detail">
+        <div class="pane-inner">
+          <h2>需求详情</h2>
+          <p class="pane-sub">每个功能模块对应左侧原型中的一个页面：在「原型预览」模式点击原型中的关键区域，可跳转到对应需求；切到「文档视图」时，原型会按模块嵌入各章节。</p>
+
+          <!-- F1 会话管理 -->
+          <section class="feature-section" id="feature-session">
+            <h3>F1 会话管理 <span class="phase-tag tag-p0">P0</span></h3>
+            <h4>页面布局</h4>
+            <p>「面试对话」模块由三块构成：左侧导航与最近会话列表；主区为会话卡片列表（标题、类型、状态、进度、操作按钮）；右上「新建面试」按钮弹出配置弹窗（面试场景、面试类型、岗位方向、关联知识库、关联简历、题目数量）。</p>
+            <h4>业务逻辑</h4>
+            <p>用户进入「面试对话」页，看到按时间倒序的会话列表。点击「新建面试」弹出配置窗：选择面试场景（实习 / 全职，决定整体难度与追问深度）、面试类型（技术面：围绕技术方案与原理深挖；行为面：STAR 情景问题；综合：两者混合），填写岗位方向（P0 起必填，用于生成通用题目语境），可选关联知识库（P1 起，出题与回答可引用知识）、关联简历（P2 起，出题优先围绕简历项目）。确认后后端创建会话并分配 thread_id，前端跳转至对话页。每个会话卡片展示标题（岗位 + 类型）、面试场景徽标、消息数、当前进度（第 N/总数题）与状态（进行中 / 已完成）；点击卡片或「继续面试」进入对话页并恢复上下文（断点续聊）；「查看报告」跳转报告页。删除会话需二次确认。</p>
+            <h4>字段规则</h4>
+            <table>
+              <tr><th>字段</th><th>类型</th><th>必填</th><th>范围 / 约束</th><th>默认</th></tr>
+              <tr><td>面试场景</td><td>单选</td><td>是</td><td>实习 / 全职（实习难度偏低，不深挖底层原理）</td><td>全职</td></tr>
+              <tr><td>面试类型</td><td>单选</td><td>是</td><td>技术面 / 行为面 / 综合</td><td>技术面</td></tr>
+              <tr><td>岗位方向</td><td>文本</td><td>是</td><td>≤ 50 字</td><td>无</td></tr>
+              <tr><td>关联知识库</td><td>下拉</td><td>否</td><td>已就绪文档可选 [P1]</td><td>不使用</td></tr>
+              <tr><td>关联简历</td><td>下拉</td><td>否</td><td>解析成功的简历 [P2]</td><td>未上传</td></tr>
+              <tr><td>题目数量</td><td>数字</td><td>是</td><td>5–30 整数</td><td>10</td></tr>
+            </table>
+            <h4>状态流转</h4>
+            <table>
+              <tr><th>当前状态</th><th>允许操作</th><th>下一状态</th><th>触发条件</th></tr>
+              <tr><td>进行中</td><td>继续 / 删除</td><td>已完成 / 已删除</td><td>题目答完或用户主动结束；删除需确认</td></tr>
+              <tr><td>已完成</td><td>查看报告 / 删除</td><td>—</td><td>报告生成后</td></tr>
+            </table>
+            <h4>边界与异常</h4>
+            <ul>
+              <li>未选择任何知识库时，出题退化为通用题库（fallback 路径，见规则 R2）。</li>
+              <li>删除会话为不可恢复操作，弹窗二次确认。</li>
+              <li>无历史会话时展示空态引导：「点击右上角新建你的第一场模拟面试」。</li>
+            </ul>
+          </section>
+
+          <!-- F2 面试对话 -->
+          <section class="feature-section" id="feature-interview">
+            <h3>F2 面试对话 <span class="phase-tag tag-p0">P0</span><span class="phase-tag tag-p1">P1</span><span class="phase-tag tag-p2">P2</span></h3>
+            <h4>页面布局</h4>
+            <p>对话页自上而下：顶部栏（返回、会话标题、类型与状态徽标、题目进度条、结束面试按钮）；中部对话流（AI 气泡与用户气泡交错，AI 气泡下方可带知识库引用标签）；底部输入区（多行输入框 + 提示一下 / 跳过此题 / 发送）；右侧信息栏（本轮评估要点、会话信息）。</p>
+            <h4>业务逻辑</h4>
+            <p>进入会话后，AI 以面试官角色按题库顺序出题（P0 为通用题库；P1 出题时先对用户输入做检索，命中知识则基于知识出题并附引用标签，可点击定位到原文段落；P2 优先从简历项目深挖）。面试场景决定出题与追问深度：实习场景以基础概念、八股要点与项目介绍为主，不追求复杂场景题，不深挖知识底层原理；全职场景为常规面试深度，可涉及场景设计与原理追问。用户提交回答后，AI 输出点评并视情况追问 1–2 轮，然后进入下一题；回答与追问均通过 SSE 逐 token 流式渲染，发送后输入框清空并显示「正在输入」指示。用户可点「提示一下」获得思路要点（每题 1 次，不计分），「跳过此题」进入下一题并在报告中标记「未作答」。全部题目答完或用户点击「结束面试」时，进入报告生成流程（F5）。进度条随当前题号更新。右侧「本轮评估要点」由评估节点实时生成，作为对话中的即时反馈。</p>
+            <h4>字段规则</h4>
+            <table>
+              <tr><th>字段</th><th>类型</th><th>约束</th></tr>
+              <tr><td>回答内容</td><td>文本</td><td>单次 ≤ 5000 字；Enter 发送，Shift+Enter 换行</td></tr>
+              <tr><td>提示次数</td><td>计数</td><td>每题 ≤ 1 次</td></tr>
+              <tr><td>追问轮次</td><td>计数</td><td>每题追问 1–2 轮后换题</td></tr>
+            </table>
+            <h4>交互状态</h4>
+            <table>
+              <tr><th>用户操作</th><th>系统响应</th></tr>
+              <tr><td>发送回答</td><td>清空输入框 → 追加用户气泡 → 显示 AI 输入中 → 流式输出回复</td></tr>
+              <tr><td>提示一下</td><td>追加系统气泡「提示要点」；已用完提示次数时按钮置灰</td></tr>
+              <tr><td>跳过此题</td><td>追加系统气泡「已跳过，进入下一题」，进度 +1</td></tr>
+              <tr><td>结束面试</td><td>二次确认 → 进入报告生成（F5）</td></tr>
+            </table>
+            <h4>边界与异常</h4>
+            <ul>
+              <li>LLM 调用超时 / 限流：重试 1 次；仍失败按 fallback 文案回复并记录日志（R2）。</li>
+              <li>检索服务（Qdrant / ES）单点不可用时降级为单路召回并告警（R6）。</li>
+              <li>用户 30 分钟无操作：会话标记为「已暂停」，下次进入自动续聊。</li>
+              <li>P0 阶段无知识库时，出题完全走通用题库，不允许出现「检索失败」类报错。</li>
+            </ul>
+          </section>
+
+          <!-- F3 简历管理 -->
+          <section class="feature-section" id="feature-resume">
+            <h3>F3 简历管理 <span class="phase-tag tag-p2">P2</span></h3>
+            <h4>页面布局</h4>
+            <p>「简历管理」页由上传区与解析结果区组成：顶部拖拽上传区（支持 PDF / Word，≤ 20MB）；下方为解析结果卡片（基本信息、技能标签、项目经历、教育背景、题库生成按钮），以及失败案例卡片（失败原因 + 重新上传）。</p>
+            <h4>业务逻辑</h4>
+            <p>用户上传简历文件后，系统进入解析流水线：文件校验（格式 / 大小）→ Docling 解析 → 结构化抽取（基本信息、教育经历、工作经历、项目经历、技能、期望岗位）→ 状态流转（上传中 → 解析中 → 成功 / 失败）。解析成功后自动构建个性化面试题库（覆盖自我介绍、项目深挖、技能考察、行为面，≥ 10 题），用户可在新建会话时关联该简历，面试出题即引用题库并按项目逐条深挖。解析失败展示失败原因（如「扫描件无文字层」）并支持重新上传。成功与失败状态在列表中并存展示，便于用户区分处理。</p>
+            <h4>字段规则</h4>
+            <table>
+              <tr><th>字段</th><th>约束</th></tr>
+              <tr><td>文件格式</td><td>PDF（含文字层）/ Word（docx）</td></tr>
+              <tr><td>文件大小</td><td>≤ 20MB</td></tr>
+              <tr><td>题库数量</td><td>≥ 10 题 / 份简历</td></tr>
+            </table>
+            <h4>状态流转</h4>
+            <table>
+              <tr><th>状态</th><th>操作</th><th>触发条件</th></tr>
+              <tr><td>上传中 → 解析中</td><td>—</td><td>文件校验通过</td></tr>
+              <tr><td>解析中 → 已就绪</td><td>生成题库 / 关联会话</td><td>结构化抽取完成</td></tr>
+              <tr><td>解析中 → 失败</td><td>重新上传 / 删除</td><td>解析异常或无可提取文本</td></tr>
+            </table>
+            <h4>边界与异常</h4>
+            <ul>
+              <li>扫描件（无文字层）给出明确失败原因与换源建议，不静默失败。</li>
+              <li>解析为异步任务，期间允许用户离开页面，完成状态下次进入可见。</li>
+            </ul>
+          </section>
+
+          <!-- F4 知识库管理 -->
+          <section class="feature-section" id="feature-kb">
+            <h3>F4 知识库管理 <span class="phase-tag tag-p1">P1</span></h3>
+            <h4>页面布局</h4>
+            <p>「知识库」页由上传区、文档列表（文件名、格式、切块数、状态徽标、查看 / 删除）、检索设置卡（语义 / 关键词权重滑块、Top-K）组成。</p>
+            <h4>业务逻辑</h4>
+            <p>用户上传知识文档（PDF / Word / Markdown，≤ 50MB）后进入入库流水线：Docling 解析 → 父子切块（父块约一个段落 ≤ 800 字，子块 2–3 句 ≤ 200 字）→ 子块向量化写入 Qdrant（bge-large-zh-v1.5，1024 维；亦可选外部 API），父块全文写入 Elasticsearch（ik_max_word 分词）→ 状态流转（解析中 → 切块中 → 向量化中 → 已就绪 / 失败）。文档列表展示切块数供用户感知规模。检索设置支持调整双路召回权重（语义 / 关键词）与 Top-K（默认 5）；检索命中子块时返回其父块作为 LLM 上下文。删除文档时级联清理 Qdrant 向量与 ES 索引，删除后检索不再命中。文档状态异步更新，入库中状态允许用户离开页面。Embedding 模型可配置（本地 bge-large-zh-v1.5 / 外部 API）：知识库创建时绑定所用模型（model_id + 维度），切换模型需对库内文档重建索引；选用外部 API 时页面展示「内容将发送至第三方」提示。</p>
+            <h4>字段规则</h4>
+            <table>
+              <tr><th>字段</th><th>约束</th></tr>
+              <tr><td>文件格式</td><td>PDF / DOCX / MD / TXT</td></tr>
+              <tr><td>文件大小</td><td>≤ 50MB / 文件；超过 500 页提示拆分</td></tr>
+              <tr><td>切块参数</td><td>父块 ≤ 800 字；子块 ≤ 200 字（2–3 句）</td></tr>
+              <tr><td>召回参数</td><td>Top-K 默认 5；权重可调，范围 0–1 步进 0.05</td></tr>
+              <tr><td>Embedding 模型</td><td>本地 bge-large-zh-v1.5（默认，1024 维）/ 外部 API；库绑定 model_id，切换需重建索引</td></tr>
+            </table>
+            <h4>状态流转</h4>
+            <table>
+              <tr><th>状态</th><th>操作</th><th>触发条件</th></tr>
+              <tr><td>解析中 → 切块中 → 向量化中</td><td>取消</td><td>流水线各步骤完成</td></tr>
+              <tr><td>向量化中 → 已就绪</td><td>查看 / 删除 / 检索使用</td><td>Qdrant 与 ES 均写入完成</td></tr>
+              <tr><td>任一环节 → 失败</td><td>重试 / 删除</td><td>解析异常、切块失败、向量服务不可用</td></tr>
+            </table>
+            <h4>边界与异常</h4>
+            <ul>
+              <li>Qdrant 或 ES 单点不可用时，入库任务标记失败并保留原文件，恢复后可重试；检索侧降级为单路（R6）。</li>
+              <li>删除文档为级联操作，成功后提示「已删除 N 个块」。</li>
+              <li>切换 Embedding 模型时，库内已向量化文档需重建索引；重建完成前检索被拦截并提示。</li>
+            </ul>
+          </section>
+
+          <!-- F5 面试报告 -->
+          <section class="feature-section" id="feature-report">
+            <h3>F5 面试报告 <span class="phase-tag tag-p0">P0</span><span class="phase-tag tag-p2">P2</span></h3>
+            <h4>页面布局</h4>
+            <p>报告页自上而下：标题与状态徽标；总分环形图 + 四个维度条形（技术深度、沟通表达、逻辑思维、项目经验）；优点 / 待改进双栏；关键问题回顾表（问题、参考要点、校验状态）；底部「再来一场 / 导出报告」操作。</p>
+            <h4>业务逻辑</h4>
+            <p>面试结束（全部题目答完或用户主动结束）后，评估节点汇总全程回答生成报告：总分（100 分制）与四维度评分、优点 / 待改进条目、关键问题回顾（每题参考要点）。P2 起，对含事实性陈述（数字、日期、定义、外部事件）的回答触发 web_verify 校验（R4）：校验结果在回顾表中标记「已核验 / 存疑 / 无法确认」，存疑项附信源链接（source=web[url]）。生成过程展示「报告生成中」加载态，完成后可查看。「再来一场」复用本次会话的配置（类型、岗位、知识库、简历、题目数量）直接新建会话，「导出报告」下载为 Markdown。</p>
+            <h4>状态流转</h4>
+            <table>
+              <tr><th>状态</th><th>操作</th><th>触发条件</th></tr>
+              <tr><td>生成中</td><td>等待</td><td>结束面试后异步生成</td></tr>
+              <tr><td>已生成</td><td>查看 / 导出 / 再来一场</td><td>评分与回顾完成</td></tr>
+              <tr><td>生成失败</td><td>重试</td><td>评估节点异常</td></tr>
+            </table>
+            <h4>边界与异常</h4>
+            <ul>
+              <li>生成失败不阻塞会话数据，可重试；重试前保留已完成的会话消息。</li>
+              <li>web_verify 为可选节点：网络不可用或搜索配额耗尽时，校验标记为「无法确认」，不影响报告主体生成。</li>
+            </ul>
+          </section>
+
+          <!-- F6 环境配置 -->
+          <section class="feature-section" id="feature-config">
+            <h3>F6 环境配置 <span class="phase-tag tag-p0">P0</span></h3>
+            <h4>页面布局</h4>
+            <p>「环境配置」页由若干配置卡片组成：LLM API Key（DeepSeek，必填，密码框 + 显示切换）；Embedding 服务（本地 bge / 外部 API 二选一，[P1] 启用；选用外部 API 展示「内容发送至第三方」提示）；联网搜索 API Key（Tavily / SerpAPI，[P2] 启用）；底部「保存配置」按钮与测试连接入口。</p>
+            <h4>业务逻辑</h4>
+            <p>用户首次进入应用时若无可用 Key，弹出引导前往环境配置页。配置项保存在后端本地运行时配置（.env / 运行时内存），前端不落盘；保存时后端校验格式（LLM Key 以 <code>sk-</code> 开头），可发起一次测试调用验证连通性。Key 变更生效策略：新会话使用新 Key；进行中的会话沿用会话开始时的 Key，避免流式中断。未配置 LLM Key 时，新建 / 继续会话被拦截并提示「请先配置 LLM API Key」，不产生半截对话。</p>
+            <h4>字段规则</h4>
+            <table>
+              <tr><th>字段</th><th>必填</th><th>范围 / 约束</th><th>生效时机</th></tr>
+              <tr><td>LLM API Key</td><td>是</td><td>DeepSeek Key，<code>sk-</code> 开头</td><td>保存后新会话生效</td></tr>
+              <tr><td>Embedding 配置</td><td>否</td><td>本地 bge-large-zh-v1.5（默认）/ 外部 API（Base URL + Key）；切换触发知识库重建 [P1]</td><td>保存后入库 / 检索生效；切换后需重建索引 [P1]</td></tr>
+              <tr><td>联网搜索 Key</td><td>否</td><td>Tavily / SerpAPI [P2]</td><td>保存后 web_verify 生效 [P2]</td></tr>
+            </table>
+            <h4>边界与异常</h4>
+            <ul>
+              <li>Key 仅存后端本地运行时配置（gitignore），不入版本库、不写入前端 localStorage 明文。</li>
+              <li>测试连接失败给出明确错误（无效 Key / 网络不通），不进入保存流程。</li>
+              <li>进行中会话不因 Key 变更而中断；旧 Key 失效时该会话按 R6 降级提示，不报堆栈。</li>
+              <li>选用外部 API Embedding 时，知识库内容将发送至第三方，页面展示外发提示；本地 bge 模型数据不出本机。</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+
+      <!-- ===== 规则 ===== -->
+      <div class="tab-pane" id="tab-rules">
+        <div class="pane-inner">
+          <h2>业务规则</h2>
+          <p class="pane-sub">需求详情未展开的跨模块规则、降级策略与边界约定。</p>
+
+          <h3>R1 · 面试对话规则</h3>
+          <ul>
+            <li><strong>出题顺序</strong>：主问题 →（用户回答 → AI 追问 1–2 轮）→ 下一题；AI 可基于回答内容自主决定追问是否必要。</li>
+            <li><strong>面试场景</strong>：实习 / 全职固定于会话创建时；实习场景出题以基础概念、八股要点与项目介绍为主，不深挖底层原理；全职场景可涉及场景设计与原理追问；两场景追问轮次相同（1–2 轮），难度差异靠题目本身。</li>
+            <li><strong>提示</strong>：每题最多 1 次提示；提示由 LLM 生成思路要点，不计入评分。</li>
+            <li><strong>跳过</strong>：跳过题目在报告中标记「未作答」，不计分但不中断流程。</li>
+            <li><strong>结束</strong>：达到题目总数自动结束；用户可中途主动结束；结束即触发报告生成。</li>
+            <li><strong>会话隔离</strong>：一个会话对应一个 thread_id；题库索引、追问计数、评估草稿均保存在会话状态中，互不串扰。</li>
+          </ul>
+
+          <h3>R2 · 检索与四级降级（P1）</h3>
+          <table>
+            <tr><th style="width:90px;">级别</th><th>触发条件</th><th>回答行为</th></tr>
+            <tr><td><span class="badge badge-success">normal</span></td><td>Top-K 中强相关块（相关性 ≥ 阈值 0.6 [待定]）可支撑回答</td><td>基于知识回答，回答附来源引用（文档名 + 段落号）</td></tr>
+            <tr><td><span class="badge badge-warning">weak</span></td><td>存在部分相关信息但不足以完整作答</td><td>弱引用回答，明确告知「知识库中信息有限」，给出可参考方向</td></tr>
+            <tr><td><span class="badge badge-gray">fallback</span></td><td>无召回或无相关块</td><td>使用通用面试题库回答（不附引用），问题不报错、不展示失败</td></tr>
+            <tr><td><span class="badge badge-danger">decline</span></td><td>连续 fallback ≥ 2 次，或用户问题明显超出面试范围</td><td>建议补充知识库 / 引导换题，并提示可跳题</td></tr>
+          </table>
+
+          <h3>R3 · 知识入库规则（P1）</h3>
+          <ul>
+            <li><strong>格式与大小</strong>：PDF / DOCX / MD / TXT；≤ 50MB / 文件。</li>
+            <li><strong>切块</strong>：父块 ≈ 段落（≤ 800 字）；子块 = 2–3 句（≤ 200 字）；父子映射保留。</li>
+            <li><strong>存储</strong>：子块向量入 Qdrant（bge-large-zh-v1.5）；父块全文入 ES（ik_max_word 分词）。</li>
+            <li><strong>双路召回</strong>：ES BM25 与 Qdrant 语义按权重合并 → 去重 → Top-K 重排（默认 K=5）。</li>
+            <li><strong>上下文</strong>：命中子块时返回对应父块作为 LLM 上下文，保证段落完整性。</li>
+          </ul>
+
+          <h3>R4 · web_verify 事实校验（P2，可选节点）</h3>
+          <table>
+            <tr><th style="width:90px;">环节</th><th>规则</th></tr>
+            <tr><td>触发</td><td>用户回答含可校验事实（数字、日期、定义、外部事件）时，由 LLM 判定是否触发校验 [待确认]</td></tr>
+            <tr><td>搜索</td><td>Tavily / SerpAPI 联网搜索，query 为回答中的事实断言</td></tr>
+            <tr><td>信源过滤</td><td>优先官方文档 / 权威站点；过滤低质与无关结果</td></tr>
+            <tr><td>比对</td><td>搜索结果与用户断言做相关 / 冲突判定</td></tr>
+            <tr><td>输出</td><td>标记「已核验 / 存疑 / 无法确认」，存疑项附 <code>source=web[url]</code></td></tr>
+          </table>
+
+          <h3>R5 · 数据与存储规则</h3>
+          <table>
+            <tr><th style="width:130px;">数据</th><th>存储</th><th>说明</th></tr>
+            <tr><td>会话 / 状态</td><td>LangGraph checkpointer</td><td>P0 MemorySaver（内存）；P2 起 SqliteSaver（interview.db），重启可恢复</td></tr>
+            <tr><td>简历</td><td>文件系统 / SQLite blob</td><td>解析结果（结构化字段 + 题库）随简历存储</td></tr>
+            <tr><td>知识集</td><td>Qdrant + ES</td><td>子块向量 + 父块全文，级联删除</td></tr>
+            <tr><td>配置</td><td>omegaconf + .env</td><td>敏感项（API Key）不入库、不入版本控制</td></tr>
+          </table>
+
+          <h3>R6 · 边界与异常</h3>
+          <ul>
+            <li><strong>LLM 异常</strong>：超时 / 限流重试 1 次，仍失败 → fallback 文案，loguru 记录 warning。</li>
+            <li><strong>检索服务异常</strong>：Qdrant / ES 单点故障 → 单路降级 + 告警日志；不向用户暴露内部错误。</li>
+            <li><strong>入库失败</strong>：状态标记失败 + 原因，保留原文件，支持重试。</li>
+            <li><strong>输入校验</strong>：消息长度、文件类型 / 大小、题目数量范围在服务端二次校验。</li>
+            <li><strong>并发</strong>：同一会话同一时刻仅一个进行中的流式回复；新建请求返回「上一回复生成中」提示。</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ===== 验收标准 ===== -->
+      <div class="tab-pane" id="tab-acceptance">
+        <div class="pane-inner">
+          <h2>验收标准</h2>
+          <p class="pane-sub">按阶段组织。验收方式分「自动化」（脚本 / 接口测试可判定）与「人工抽检」（需人工体验或抽样评审）。每阶段验收全部通过后进入下一阶段；验收结论与通过清单记入 CHANGELOG。</p>
+
+          <div class="callout callout-info">
+            <span class="co-icon">ℹ️</span>
+            <div>验收基线环境：Chrome / Edge 最新稳定版；单机部署（本地服务）；DeepSeek API 正常配额。</div>
+          </div>
+
+          <h3>A · 工程与通用</h3>
+          <table>
+            <tr><th style="width:56px;">编号</th><th>验收项</th><th>通过标准</th><th style="width:100px;">方式</th></tr>
+            <tr><td>A-1</td><td>工程规范</td><td><code>uv sync</code> 可复现环境；<code>ruff check</code> 无错误；pre-commit 钩子可运行</td><td>自动化</td></tr>
+            <tr><td>A-2</td><td>日志规范</td><td>loguru 分级日志覆盖关键节点：入库、检索、降级、会话创建 / 结束</td><td>代码审查</td></tr>
+            <tr><td>A-3</td><td>配置规范</td><td>omegapnfig 统一配置；API Key 等敏感项仅走 .env，不入库、不入版本控制</td><td>代码审查</td></tr>
+            <tr><td>A-4</td><td>前端质量</td><td>Chrome / Edge 最新版全页面无 console 报错；键盘可操作全部主流程</td><td>人工</td></tr>
+            <tr><td>A-5</td><td>数据隔离</td><td>两个并发会话（不同 thread_id）消息互不串扰</td><td>自动化</td></tr>
+          </table>
+
+          <h3>P0 · 可对话 MVP</h3>
+          <table>
+            <tr><th style="width:56px;">编号</th><th>验收项</th><th>通过标准</th><th style="width:100px;">方式</th></tr>
+            <tr><td>P0-1</td><td>SSE 流式对话</td><td>发送消息后 5s 内出现首个 token，回复逐 token 流式渲染，无整段等待</td><td>自动化 + 人工</td></tr>
+            <tr><td>P0-2</td><td>多轮对话稳定性</td><td>连续 20 轮问答，无状态串扰，每轮回复与当前话题相关</td><td>自动化 + 人工</td></tr>
+            <tr><td>P0-3</td><td>断点续聊（内存）</td><td>刷新页面后同一会话可继续对话，历史消息完整展示</td><td>人工</td></tr>
+            <tr><td>P0-4</td><td>会话管理</td><td>新建 / 列表 / 继续 / 删除（含二次确认）全流程可用</td><td>人工</td></tr>
+            <tr><td>P0-5</td><td>并发稳定性</td><td>5 个会话并发对话，服务无崩溃、无 5xx</td><td>自动化</td></tr>
+            <tr><td>P0-6</td><td>结束与报告（基础）</td><td>结束面试后生成基础报告（总分 + 四维度 + 优缺点）</td><td>人工</td></tr>
+            <tr><td>P0-7</td><td>面试场景（实习 / 全职）</td><td>新建面试可选实习 / 全职；实习场景出题与追问以基础概念、项目介绍为主，不深挖底层原理；场景徽标在会话列表与对话页正确展示</td><td>人工抽检</td></tr>
+            <tr><td>P0-8</td><td>环境配置（LLM Key）</td><td>用户可自配 DeepSeek API Key；<code>sk-</code> 前缀校验；未配置时新建 / 继续会话被拦截并提示；Key 仅存后端本地运行时配置，不入版本库</td><td>人工 + 代码审查</td></tr>
+          </table>
+
+          <h3>P1 · 知识库 + RAG</h3>
+          <table>
+            <tr><th style="width:56px;">编号</th><th>验收项</th><th>通过标准</th><th style="width:100px;">方式</th></tr>
+            <tr><td>P1-1</td><td>文档入库</td><td>PDF / Word / Markdown 各 5 份端到端入库，成功率 ≥ 95%，切块数与状态正确展示</td><td>自动化</td></tr>
+            <tr><td>P1-2</td><td>双路召回</td><td>对库内文档内容提问 50 题，Top-K（K=5）召回命中率 ≥ 80%</td><td>自动化 + 人工抽检</td></tr>
+            <tr><td>P1-3</td><td>引用标注</td><td>normal 级别回答附来源引用，引用指向真实文档段落，准确率 ≥ 90%</td><td>人工抽检</td></tr>
+            <tr><td>P1-4</td><td>四级降级</td><td>构造 normal / weak / fallback / decline 四类场景各 5 次，降级路径正确、无报错回复</td><td>自动化</td></tr>
+            <tr><td>P1-5</td><td>删除级联清理</td><td>删除文档后 Qdrant 与 ES 同步清理，对已删内容提问 0 命中</td><td>自动化</td></tr>
+            <tr><td>P1-6</td><td>检索性能</td><td>单次检索（含双路合并）P95 ≤ 2s</td><td>自动化</td></tr>
+            <tr><td>P1-7</td><td>Embedding 模型切换</td><td>切换模型后重建索引，查询模型与库绑定模型一致，旧模型向量不残留</td><td>自动化</td></tr>
+          </table>
+
+          <h3>P2 · 简历 + 持久化</h3>
+          <table>
+            <tr><th style="width:56px;">编号</th><th>验收项</th><th>通过标准</th><th style="width:100px;">方式</th></tr>
+            <tr><td>P2-1</td><td>简历解析</td><td>20 份真实简历（含 PDF / Word）解析成功率 ≥ 90%；姓名、技能、项目字段抽取准确率 ≥ 85%</td><td>自动化 + 人工抽检</td></tr>
+            <tr><td>P2-2</td><td>简历驱动出题</td><td>每份简历生成 ≥ 10 题；人工抽检 20 份，≥ 80% 题目与简历内容相关</td><td>人工抽检</td></tr>
+            <tr><td>P2-3</td><td>跨重启持久化</td><td>服务重启后历史会话与消息完整恢复，可继续对话</td><td>人工</td></tr>
+            <tr><td>P2-4</td><td>web_verify（可选）</td><td>含事实性陈述的回答触发校验，返回信源链接且标记正确（相关 / 冲突 / 无法确认）</td><td>人工抽检</td></tr>
+            <tr><td>P2-5</td><td>端到端链路</td><td>上传简历 → 新建面试 → 简历驱动问答 → 报告（含校验标记）全流程可用</td><td>人工</td></tr>
+          </table>
+
+          <h3>N · 非功能</h3>
+          <table>
+            <tr><th style="width:56px;">编号</th><th>验收项</th><th>通过标准</th><th style="width:100px;">方式</th></tr>
+            <tr><td>N-1</td><td>回复延迟</td><td>单会话 30 轮内，单轮完整回复（含 LLM 生成）P95 ≤ 15s；首 token 延迟（TTFT）P95 ≤ 3s</td><td>自动化</td></tr>
+            <tr><td>N-2</td><td>安全</td><td>上传文件类型 / 大小服务端校验（默认 ≤ 10MB / 文件）；文件名做路径安全处理，无路径穿越；API Key 明文存 .env（gitignore），日志与前端展示一律掩码</td><td>代码审查 + 自动化</td></tr>
+            <tr><td>N-3</td><td>异常降级</td><td>LLM 超时、检索服务单点故障时用户可见文案为业务提示，不含堆栈信息</td><td>人工 + 代码审查</td></tr>
+            <tr><td>N-4</td><td>依赖可用性</td><td>Qdrant / ES 提供 docker-compose 一键启动；依赖缺失时应用可正常启动，知识库功能降级为业务提示，不阻塞核心对话</td><td>人工 + 代码审查</td></tr>
+            <tr><td>N-5</td><td>可观测性</td><td>结构化 JSON 日志（ISO8601 时间戳，按大小滚动保留）；每轮 LLM / 检索耗时与 token 用量记明细；慢请求（TTFT &gt; 5s）输出告警日志</td><td>代码审查 + 自动化</td></tr>
+            <tr><td>N-6</td><td>兼容性</td><td>前端兼容 Chrome / Edge 最近 2 个主版本与 Safari 17.4+</td><td>人工抽检</td></tr>
+            <tr><td>N-7</td><td>并发</td><td>全局单流式：同一时刻仅一个会话可进行流式回复，其他请求排队并返回「上一回复生成中」提示</td><td>自动化</td></tr>
+            <tr><td>N-8</td><td>数据安全</td><td>删除即物理删：会话 / 简历 / 知识库删除后，SQLite、Qdrant、ES 中对应数据不可再查询</td><td>自动化</td></tr>
+            <tr><td>N-9</td><td>配置默认</td><td>服务默认端口 8000（可配置）；SSE 心跳 15s；上传限制 10MB / 文件</td><td>代码审查</td></tr>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</div>
+
+<!-- 链接指示器 -->
+<div class="link-indicator" id="linkIndicator"></div>
+
+<!-- 文档视图（由 JS 组装） -->
+<div class="text-mode-doc" id="textModeDoc"></div>
+
+<script>
+(function () {
+  /* ===== 常量与状态 ===== */
+  var routeMap = {
+    'page-home': 'ai-interviewer.app/interview/sessions',
+    'page-interview': 'ai-interviewer.app/interview/chat/20260915-01',
+    'page-resume': 'ai-interviewer.app/resume',
+    'page-kb': 'ai-interviewer.app/knowledge-base',
+    'page-report': 'ai-interviewer.app/interview/report/20260915-01',
+    'page-config': 'ai-interviewer.app/config'
+  };
+  var featureNames = {
+    'feature-session': 'F1 会话管理',
+    'feature-interview': 'F2 面试对话',
+    'feature-resume': 'F3 简历管理',
+    'feature-kb': 'F4 知识库管理',
+    'feature-report': 'F5 面试报告',
+    'feature-config': 'F6 环境配置'
+  };
+  var interviewType = '技术面';
+  var interviewScene = '全职';
+  var currentQuestion = 2;
+
+  /* ===== 原型页面导航 ===== */
+  /* 侧边栏折叠（Apple 风格） */
+  (function () {
+    var root = document.getElementById('prototypeRoot');
+    if (!root) return;
+    root.querySelectorAll('.app-sidebar').forEach(function (sb) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sidebar-collapse';
+      btn.setAttribute('aria-label', '折叠 / 展开历史会话栏');
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><polyline points="15 6 9 12 15 18"/></svg>';
+      btn.addEventListener('click', function () { sb.classList.toggle('collapsed'); });
+      sb.appendChild(btn);
+    });
+  })();
+
+  window.navigate = function (pageId) {
+    var root = document.getElementById('prototypeRoot');
+    var pages = root.querySelectorAll('.page');
+    pages.forEach(function (p) { p.classList.remove('active'); });
+    var page = document.getElementById(pageId);
+    if (page) page.classList.add('active');
+    var bar = document.getElementById('addressBar');
+    if (bar) bar.textContent = routeMap[pageId] || pageId;
+  };
+
+  /* ===== Tab 切换 ===== */
+  var tabBtns = document.querySelectorAll('.tab-bar .tab-btn');
+  var tabPanes = document.querySelectorAll('.tab-content-wrapper > .tab-pane');
+  function switchTab(tabId) {
+    tabBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tabId); });
+    tabPanes.forEach(function (p) { p.classList.toggle('active', p.id === tabId); });
+  }
+  tabBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () { switchTab(btn.dataset.tab); });
+  });
+
+  /* ===== 原型 ↔ 文档联动 ===== */
+  window.linkToFeature = function (featureId) {
+    switchTab('tab-detail');
+    window.setTimeout(function () {
+      var target = document.getElementById(featureId);
+      var wrapper = document.getElementById('tabContentWrapper');
+      if (!target || !wrapper) return;
+      wrapper.scrollTo({ top: target.offsetTop - wrapper.offsetTop - 20, behavior: 'smooth' });
+      document.querySelectorAll('.feature-section').forEach(function (s) { s.classList.remove('highlight'); });
+      target.classList.add('highlight');
+      window.setTimeout(function () { target.classList.remove('highlight'); }, 2500);
+      var indicator = document.getElementById('linkIndicator');
+      if (!indicator) return;
+      indicator.textContent = '→ ' + (featureNames[featureId] || featureId);
+      indicator.classList.add('show');
+      window.setTimeout(function () { indicator.classList.remove('show'); }, 2000);
+    }, 120);
+  };
+  var prototypeRoot = document.getElementById('prototypeRoot');
+  if (prototypeRoot) {
+    prototypeRoot.addEventListener('click', function (event) {
+      var el = event.target.closest('[data-link]');
+      if (el) linkToFeature(el.dataset.link);
+    });
+  }
+
+  /* ===== 新建面试弹窗 ===== */
+  window.openModal = function () {
+    document.getElementById('newSessionModal').classList.add('show');
+  };
+  window.closeModal = function () {
+    document.getElementById('newSessionModal').classList.remove('show');
+  };
+  window.pickType = function (el, type) {
+    interviewType = type;
+    el.parentElement.querySelectorAll('.radio-chip').forEach(function (c) { c.classList.remove('selected'); });
+    el.classList.add('selected');
+  };
+  window.pickScene = function (el, scene) {
+    interviewScene = scene;
+    el.parentElement.querySelectorAll('.radio-chip').forEach(function (c) { c.classList.remove('selected'); });
+    el.classList.add('selected');
+  };
+  window.pickEmbed = function (el, mode) {
+    el.parentElement.querySelectorAll('.radio-chip').forEach(function (c) { c.classList.remove('selected'); });
+    el.classList.add('selected');
+    document.getElementById('embedHint').textContent =
+      mode === 'api' ? '外部 API 会将知识库内容发送至第三方；切换模型需重建索引'
+                     : '本地模型，知识内容不出本机；切换模型需重建索引';
+  };
+  window.startSession = function () {
+    closeModal();
+    currentQuestion = 1;
+    navigate('page-interview');
+    var fill = document.querySelector('#page-interview .progress-fill');
+    if (fill) fill.style.width = '10%';
+    var qLabel = document.querySelector('#page-interview .p-head span[style*="font-size:12px"]');
+    if (qLabel) qLabel.textContent = '第 1 / 10 题';
+    var chatList = document.getElementById('chatList');
+    if (chatList) {
+      chatList.innerHTML = '<div class="msg msg-ai"><div class="msg-avatar">AI</div><div><div class="msg-bubble">你好，我是今天的面试官。' + interviewType + '共 10 题，我们从第 1 题开始。先简单介绍一下你自己，重点讲一个你最近负责的项目。</div><div class="msg-meta"><span>刚刚</span></div></div></div>';
+    }
+  };
+
+  /* ===== 环境配置模拟 ===== */
+  window.testConfig = function () {
+    var msg = document.getElementById('configMsg');
+    if (!msg) return;
+    msg.textContent = '连接成功 · 配额正常';
+    msg.style.display = 'inline';
+    msg.style.color = 'var(--success)';
+  };
+  window.saveConfig = function () {
+    var msg = document.getElementById('configMsg');
+    if (!msg) return;
+    msg.textContent = '已保存（仅存后端本地运行时配置）';
+    msg.style.display = 'inline';
+    msg.style.color = 'var(--success)';
+  };
+
+  /* ===== 对话模拟 ===== */
+  var AI_REPLIES = [
+    '理解。你提到负责 RAG 检索链路——能不能具体讲一下双路召回的结果是如何合并去重的？',
+    '很好。那如果 Qdrant 和 ES 对同一个问题给出的结果冲突，你的重排策略是什么？',
+    '明白了。最后一个问题：这个项目如果让你重新设计一遍，你会改变哪一部分？为什么？'
+  ];
+  var replyIdx = 0;
+  function appendMsg(role, text, withRef) {
+    var chatList = document.getElementById('chatList');
+    if (!chatList) return;
+    var div = document.createElement('div');
+    div.className = 'msg ' + (role === 'ai' ? 'msg-ai' : 'msg-user');
+    div.innerHTML = '<div class="msg-avatar">' + (role === 'ai' ? 'AI' : '我') + '</div>' +
+      '<div><div class="msg-bubble"></div><div class="msg-meta">' +
+      (role === 'ai' && withRef ? '<span>刚刚</span><span class="chip chip-link" data-link="feature-kb">知识库 · 系统设计手册.pdf 第 15 段</span>' : '<span>刚刚</span>') +
+      '</div></div>';
+    chatList.appendChild(div);
+    return div.querySelector('.msg-bubble');
+  }
+  window.sendMessage = function () {
+    var input = document.getElementById('chatInput');
+    if (!input || !input.value.trim()) return;
+    appendMsg('user', input.value);
+    input.value = '';
+    var typing = document.createElement('div');
+    typing.className = 'msg msg-ai';
+    typing.innerHTML = '<div class="msg-avatar">AI</div><div><div class="msg-bubble"><span class="typing"><span></span><span></span><span></span></span></div></div>';
+    document.getElementById('chatList').appendChild(typing);
+    var reply = AI_REPLIES[Math.min(replyIdx, AI_REPLIES.length - 1)];
+    replyIdx++;
+    window.setTimeout(function () {
+      typing.querySelector('.msg-bubble').textContent = reply;
+    }, 900);
+  };
+  window.hintAction = function () {
+    var bubble = appendMsg('ai', '提示：可以先从「为什么需要双路召回」切入——语义检索擅长意图理解，关键词检索擅长专有名词与精确匹配，结合两者互为兜底。');
+    if (bubble) bubble.style.background = 'var(--warning-bg)';
+  };
+  window.skipAction = function () {
+    currentQuestion = Math.min(currentQuestion + 1, 10);
+    appendMsg('ai', '已跳过本题，进入第 ' + currentQuestion + ' 题。');
+    var fill = document.querySelector('#page-interview .progress-fill');
+    if (fill) fill.style.width = (currentQuestion / 10 * 100) + '%';
+    document.querySelector('#page-interview .p-head span[style*="font-size:12px"]').textContent = '第 ' + currentQuestion + ' / 10 题';
+  };
+  window.endInterview = function () {
+    navigate('page-report');
+  };
+
+  /* ===== 简历模拟 ===== */
+  window.uploadResume = function () {
+    document.getElementById('resumeParsing').style.display = 'block';
+    window.setTimeout(function () {
+      document.getElementById('resumeParsing').style.display = 'none';
+      document.getElementById('resumeResult').style.display = 'block';
+    }, 1400);
+  };
+  window.generateQuestions = function () {
+    var el = document.getElementById('questionGenResult');
+    el.style.display = 'inline';
+    el.parentElement.querySelector('.btn-primary').disabled = true;
+  };
+
+  /* ===== 知识库模拟 ===== */
+  window.uploadDoc = function () {
+    var row = document.getElementById('kbDocRow');
+    row.style.display = 'flex';
+    var stateEl = document.getElementById('kbDocState');
+    var badgeEl = document.getElementById('kbDocBadge');
+    var states = [['解析中…', '解析中…'], ['向量化中…', '向量化中…'], ['已就绪 · 36 块', '已就绪']];
+    var i = 0;
+    (function step() {
+      if (i >= states.length) return;
+      stateEl.textContent = states[i][0];
+      badgeEl.textContent = states[i][1];
+      badgeEl.className = 'badge ' + (i === 2 ? 'badge-success' : 'badge-info');
+      i++;
+      window.setTimeout(step, 1000);
+    })();
+  };
+  window.semSlider = function (val) {
+    document.getElementById('semVal').textContent = val;
+    document.getElementById('kwVal').textContent = (Math.round((1 - val) * 100) / 100).toFixed(2);
+  };
+
+  /* ===== 面板拖拽缩放 ===== */
+  (function () {
+    var handle = document.getElementById('resizeHandle');
+    var left = document.getElementById('leftPanel');
+    var container = document.getElementById('mainLayout');
+    var frame = document.getElementById('browserFrame');
+    if (!handle || !left || !container || !frame) return;
+    var isDragging = false;
+    handle.addEventListener('mousedown', function () {
+      isDragging = true;
+      handle.classList.add('active');
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', function (event) {
+      if (!isDragging) return;
+      var rect = container.getBoundingClientRect();
+      var pct = ((event.clientX - rect.left) / rect.width) * 100;
+      left.style.flex = '0 0 ' + Math.max(25, Math.min(70, pct)) + '%';
+      scalePrototype();
+    });
+    document.addEventListener('mouseup', function () {
+      isDragging = false;
+      handle.classList.remove('active');
+      document.body.style.userSelect = '';
+    });
+    function scalePrototype() {
+      var padding = 18;
+      var panelW = left.clientWidth - padding * 2;
+      var panelH = left.clientHeight - padding * 2;
+      var scale = Math.min(panelW / 1200, panelH / 800, 1.1);
+      scale = Math.max(scale, 0.2);
+      frame.style.transform = 'scale(' + scale + ')';
+      frame.style.left = (padding + (panelW - 1200 * scale) / 2) + 'px';
+      frame.style.top = (padding + (panelH - 800 * scale) / 2) + 'px';
+    }
+    window.addEventListener('resize', scalePrototype);
+    window.addEventListener('load', scalePrototype);
+    window.setTimeout(scalePrototype, 120);
+  })();
+
+  /* ===== 模式切换（原型 / 文档） ===== */
+  var modePreviewBtn = document.getElementById('modePreviewBtn');
+  var modeTextBtn = document.getElementById('modeTextBtn');
+  function injectFeaturePrototypes(container) {
+    var proto = document.getElementById('prototypeRoot');
+    if (!proto) return;
+    var pages = proto.querySelectorAll('.page');
+    var used = {};
+    container.querySelectorAll('.feature-section').forEach(function (section) {
+      var featureId = section.id;
+      if (!featureId) return;
+      var matchedPage = null;
+      pages.forEach(function (page) {
+        if (used[page.id]) return;
+        var els = page.querySelectorAll('[data-link]');
+        for (var i = 0; i < els.length; i++) {
+          if (els[i].dataset.link === featureId) { matchedPage = page; break; }
+        }
+        if (page.getAttribute('data-link') === featureId) matchedPage = page;
+      });
+      if (!matchedPage) return;
+      used[matchedPage.id] = true;
+      var clone = matchedPage.cloneNode(true);
+      clone.style.position = 'absolute';
+      clone.style.top = '0'; clone.style.left = '0'; clone.style.right = '0'; clone.style.bottom = '0';
+      clone.style.display = 'flex';
+      clone.style.overflowY = 'auto';
+      clone.style.overflowX = 'hidden';
+      var frame = document.createElement('div');
+      frame.style.cssText = 'width:100%;max-width:860px;height:440px;border-radius:10px;overflow:hidden;position:relative;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.08);margin:0 auto 6px;border:1px solid #E7E4DE;';
+      frame.appendChild(clone);
+      var wrapper = document.createElement('div');
+      wrapper.style.cssText = 'border:1px solid #E7E4DE;border-radius:12px;padding:16px;margin:0 0 18px;background:#FAFAF8;';
+      wrapper.innerHTML = '<div style="font-size:12px;color:#667085;margin-bottom:10px;font-weight:600;">▶ 可交互原型（点击体验）</div>';
+      wrapper.appendChild(frame);
+      section.insertBefore(wrapper, section.children[1] || null);
+    });
+  }
+  window.switchMode = function (mode) {
+    modePreviewBtn.classList.toggle('active', mode === 'preview');
+    modeTextBtn.classList.toggle('active', mode === 'text');
+    if (mode === 'text') {
+      var textDoc = document.getElementById('textModeDoc');
+      if (!textDoc) return;
+      var html = '<h1>AI 面试官 · 产品需求文档</h1><p class="tm-meta">版本 V1.0 · 2026-09-15 · 状态：待评审</p>';
+      tabPanes.forEach(function (pane, i) {
+        if (i > 0) html += '<hr style="border:none;border-top:1px solid #E7E4DE;margin:32px 0;">';
+        html += pane.innerHTML;
+      });
+      textDoc.innerHTML = html;
+      injectFeaturePrototypes(textDoc);
+      document.body.classList.add('text-mode');
+      window.scrollTo(0, 0);
+    } else {
+      document.body.classList.remove('text-mode');
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
+    }
+  };
+  modePreviewBtn.addEventListener('click', function () { switchMode('preview'); });
+  modeTextBtn.addEventListener('click', function () { switchMode('text'); });
+})();
+</script>
+</body>
+</html>

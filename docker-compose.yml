@@ -1,0 +1,62 @@
+# P1 知识库检索基础设施：Qdrant（向量）+ Elasticsearch（全文，ik 分词）+ TEI（Embedding）
+# 用法：docker compose up -d；缺失时知识库功能降级，不阻塞核心对话
+# 2026-09-17：自电商问数项目迁移（shopkeeper-agent 已停用）；模型文件移至 docker/embedding/
+services:
+  qdrant:
+    # 镜像复用（电商问数同版本 v1.16）；数据卷为本项目独立空卷
+    image: qdrant/qdrant:v1.16
+    container_name: ai-interviewer-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    mem_limit: 1g
+
+  elasticsearch:
+    # 直接复用电商问数项目已构建镜像（ES 8.19.10 + ik 8.19.10），零构建零拉取；
+    # 若该镜像不可用，改用 build: ./docker/es（Dockerfile 从零构建：同版本 + 本地 ik zip）
+    image: shopkeeper-elasticsearch:latest
+    container_name: ai-interviewer-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=3s"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    mem_limit: 1g
+
+  embedding:
+    # TEI（text-embeddings-inference）：bge-large-zh-v1.5，OpenAI-compatible /v1/embeddings
+    # 模型文件自电商问数项目迁移（仅保留 safetensors，~1.3GB）
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.8
+    platform: linux/amd64
+    container_name: ai-interviewer-embedding
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      MODEL_ID: /models/bge-large-zh-v1.5
+      MAX_CONCURRENT_REQUESTS: "16"
+      MAX_BATCH_TOKENS: "16384"
+    volumes:
+      - ./docker/embedding/bge-large-zh-v1.5:/models/bge-large-zh-v1.5
+    mem_limit: 2g
+
+volumes:
+  qdrant_data:
+  es_data:

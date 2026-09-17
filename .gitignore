@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Env / secrets
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# Node / frontend
+node_modules/
+web/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Runtime local data
+data/
+*.db
+.tmp/
+.trae-html-share-packages/
+
+# Local model weights & third-party plugins (re-downloadable, keep repo slim)
+docker/embedding/
+docker/es/plugins/
+
+# Execution ledger (process noise, not project assets)
+.superpowers/
