@@ -33,5 +33,5 @@ REPORT = """\
   "review": [{{"question": "题干", "answer": "候选回答摘要", "comment": "一句话评语"}}],
   "verified": null
 }}
-verified 字段由系统填充：核验通过项列表或 null（无核验 / 未启用）。\
+verified 字段由系统填充：LLM 固定输出 null，系统解析后覆盖为核验项列表或保持 null（未启用）。\
 """
