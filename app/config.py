@@ -59,6 +59,22 @@ _DEFAULTS = {
             "timeout": 10,
         },
     },
+    "interview": {
+        "db": "data/interview.db",
+    },
+    "resume": {
+        "db": "data/resume.db",
+        "upload_dir": "data/resumes",
+        "max_upload_mb": 20,
+        "ratio": {"technical": 0.3, "behavioral": 0.8, "comprehensive": 0.5},
+    },
+    "verify": {
+        "enabled": True,
+        "base_url": "https://api.bochaai.com/v1/web-search",
+        "api_key": "",
+        "timeout": 10,
+        "top_k": 3,
+    },
 }
 
 
@@ -134,6 +150,35 @@ def load_config(config_path: Path | None = None, env_path: Path | None = None) -
                     "dims": _env_int("EMBEDDING_DIMS", base.retrieval.embedding.dims),
                     "timeout": _env_int("EMBEDDING_TIMEOUT", base.retrieval.embedding.timeout),
                 },
+            },
+            "interview": {
+                "db": os.getenv("INTERVIEW_DB", base.interview.db),
+            },
+            "resume": {
+                "db": os.getenv("RESUME_DB", base.resume.db),
+                "upload_dir": os.getenv("RESUME_UPLOAD_DIR", base.resume.upload_dir),
+                "max_upload_mb": _env_int("RESUME_MAX_MB", base.resume.max_upload_mb),
+                "ratio": {
+                    "technical": float(
+                        os.getenv("RESUME_RATIO_TECHNICAL", str(base.resume.ratio.technical))
+                    ),
+                    "behavioral": float(
+                        os.getenv("RESUME_RATIO_BEHAVIORAL", str(base.resume.ratio.behavioral))
+                    ),
+                    "comprehensive": float(
+                        os.getenv(
+                            "RESUME_RATIO_COMPREHENSIVE", str(base.resume.ratio.comprehensive)
+                        )
+                    ),
+                },
+            },
+            "verify": {
+                "enabled": os.getenv("VERIFY_ENABLED", str(base.verify.enabled)).lower()
+                in ("1", "true", "yes"),
+                "base_url": os.getenv("VERIFY_BASE_URL", base.verify.base_url),
+                "api_key": os.getenv("VERIFY_API_KEY", base.verify.api_key),
+                "timeout": _env_int("VERIFY_TIMEOUT", base.verify.timeout),
+                "top_k": _env_int("VERIFY_TOP_K", base.verify.top_k),
             },
         }
     )

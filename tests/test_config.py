@@ -68,3 +68,18 @@ def test_mask_secret():
     assert mask_secret("") == ""
     assert mask_secret("sk-a7ed48d6072f4b2f") == "sk-•••"
     assert mask_secret("plain-text") == "•••"
+
+
+def test_config_has_interview_resume_verify_sections():
+    cfg = load_config(config_path=Path("nonexistent.yaml"), env_path=Path("nonexistent.env"))
+    assert cfg.interview.db == "data/interview.db"
+    assert cfg.resume.db == "data/resume.db"
+    assert cfg.resume.upload_dir == "data/resumes"
+    assert cfg.resume.max_upload_mb == 20
+    assert cfg.resume.ratio.technical == 0.3
+    assert cfg.resume.ratio.behavioral == 0.8
+    assert cfg.resume.ratio.comprehensive == 0.5
+    assert cfg.verify.base_url == "https://api.bochaai.com/v1/web-search"
+    assert cfg.verify.api_key == ""
+    assert cfg.verify.top_k == 3
+    assert cfg.verify.timeout == 10
