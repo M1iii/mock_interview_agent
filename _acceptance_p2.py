@@ -7,8 +7,29 @@ P2-3 跨重启进程内模拟（SqliteSaver + SqliteSessionStore 同库重建）
 用法：uv run python _acceptance_p2.py [--only p2-1|p2-2|p2-3|p2-4|p2-5|all] [--keep]
 --keep 保留验收数据（默认结束清理：删除本次上传的简历记录与文件、测试会话、
 恢复 verify-key、删临时库）。
-退出码 0 = 全部通过，1 = 有未通过项。不参与 pytest 收集。
+退出码 0 = 门禁项全部通过，1 = 门禁项有未通过项。不参与 pytest 收集。
+
+报告项分三类（第 2 轮修复）：
+- `kind="gate"` 门禁项：判定退出码，真实 FAIL 即应用/脚本缺陷；
+- `kind="dep"` 依赖缺失 / 用法错误：如「无本次上传且库内无语料 stem 的 ready 简历」
+  （需先跑 p2-1 / 单独 `--only p2-2|p2-5` 未上传语料）——只提示不判定，**不计入 failed**；
+- `kind="obs"` 观察项：如失败简历 retry 路径，覆盖尚未纳入门禁的能力，**不计入成功率**，
+  FAIL 只作提示（SUMMARY 单独列出）。
+SUMMARY 分别打印三类计数，避免「依赖未满足」与「应用缺陷 FAIL」同形。
 不修改任何 app/ 代码；暴露应用缺陷时记 FAIL + 归因落档。
+
+审查修复轮（第 2 轮）要点：
+- minor-1：`_scoped_ready` 为空（依赖缺失/用法错误）改为 `kind="dep"` 记录，
+  不计入 failed、不影响退出码，SUMMARY 单独列出。
+- minor-2：P2-5 skip 循环命中 `error` 事件时先记录该 error 内容（门禁项）再 break，
+  避免「题推进失败但报告断言仍 PASS」被掩盖（首次运行即暴露真实缺陷，见 CHANGELOG 顶部条目）。
+- minor-3：p2_4/p2_5 内 5 处 `assert`（verify-key 置位/清空/get 校验）改为
+  「记录 FAIL 项 + 提前 return」，且 main 对每个检查项兜底 try/except，
+  保证全量运行总能输出 SUMMARY 与退出码。
+- minor-4：`_check_report_summary` detail 追加原始 `summary`（截断）便于人工判读。
+- 复审建议（非门禁）：新增 `kind="obs"` 观察项覆盖 `POST /api/resumes/{id}/retry`
+  （R6「失败保留原文件可重试」）；本次无 failed 简历时先构造探针覆盖该路径，
+  探针 id 只入 `_probe_ids`（cleanup 删除），不扰动 P2-1/P2-2/P2-5 取样口径。
 
 审查修复轮（第 1 轮）要点：
 - F3：P2-5 自设占位 verify-key + 补丁 `BochaClient.search`，使第 1 题真实走通 VerifyContext
@@ -36,7 +57,7 @@ from omegaconf import OmegaConf
 from app.config import PROJECT_ROOT, load_config
 from app.interview.ratio import resume_question_indices
 from app.main import app
-from app.store.resume import READY, ResumeStore
+from app.store.resume import FAILED, READY, ResumeStore
 
 CORPUS_DIR = Path("tests/acceptance/resumes")
 GOLD = json.loads(Path("tests/acceptance/resume_gold.json").read_text(encoding="utf-8"))
@@ -65,25 +86,61 @@ P23_DB = PROJECT_ROOT / "data" / "_acceptance_p2_3.db"
 
 _uploaded_ids: list[str] = []  # 本次运行上传的简历 id（F6：唯一可信取样范围 + cleanup）
 _uploaded_by_name: dict[str, str] = {}  # 本次运行：语料文件名 → resume_id
+_probe_ids: list[str] = []  # 观察项构造的 failed 探针简历 id（仅 cleanup，不参与 P2-1/P2-2 取样）
 _session_ids: list[str] = []  # P2-4/P2-5 创建的会话 id（cleanup）
 _p23_instances: list = []  # P2-3 实例（cleanup 关连接）
 
 
 class Report:
+    """三类报告项（第 2 轮修复）：
+
+    - `gate`（默认）：门禁项，决定退出码；FAIL = 应用缺陷或脚本缺陷；
+    - `dep`：依赖缺失 / 用法错误（如未先跑 p2-1 上传语料）——**不计入 failed**，仅提示；
+    - `obs`：观察项（如 retry 路径）——**不计入成功率门禁**，FAIL 仅提示。
+
+    仅 `gate` 类参与 `gate_failed` 计数，`dep` / `obs` 在 SUMMARY 中单独列出，
+    避免「依赖未满足」「观察项未过」与「应用缺陷 FAIL」同形。
+    """
+
+    KINDS = ("gate", "dep", "obs")
+    MARKS = {"gate": ("PASS", "FAIL"), "obs": ("PASS", "FAIL"), "dep": ("PASS", "SKIP")}
+
     def __init__(self) -> None:
         self.items: list[dict] = []
 
-    def add(self, item: str, passed: bool, data: str = "") -> None:
-        self.items.append({"item": item, "passed": passed, "data": data})
-        mark = "PASS" if passed else "FAIL"
-        print(f"[{mark}] {item}" + (f" | {data}" if data else ""))
+    def add(self, item: str, passed: bool, data: str = "", kind: str = "gate") -> None:
+        assert kind in self.KINDS, f"unknown kind: {kind}"
+        self.items.append({"item": item, "passed": passed, "data": data, "kind": kind})
+        mark = self.MARKS[kind][0 if passed else 1]
+        print(f"[{mark}][{kind}] {item}" + (f" | {data}" if data else ""))
 
-    def summary(self) -> tuple[int, int]:
-        ok = sum(1 for i in self.items if i["passed"])
-        return ok, len(self.items) - ok
+    def summary(self) -> dict[str, int]:
+        def _count(kind: str, passed: bool | None = None) -> int:
+            return sum(
+                1
+                for i in self.items
+                if i["kind"] == kind and (passed is None or i["passed"] is passed)
+            )
+
+        return {
+            "gate_passed": _count("gate", True),
+            "gate_failed": _count("gate", False),
+            "obs_total": _count("obs"),
+            "obs_failed": _count("obs", False),
+            "dep_total": _count("dep"),
+        }
 
 
 report = Report()
+
+
+def _add_dep(item: str, reason: str) -> None:
+    """记录「依赖缺失 / 用法错误」项（minor-1）：不计入 failed、不影响退出码。
+
+    触发场景：`--only p2-2` / `--only p2-5` 未先跑 p2-1 上传语料，或语料上传全失败，
+    此时 `_scoped_ready` 返回空 —— 属调用方用法问题，不是应用缺陷。
+    """
+    report.add(item, False, f"usage-error｜{reason}", kind="dep")
 
 
 def _ready_resumes(store: ResumeStore) -> list:
@@ -140,7 +197,11 @@ def _kb_id_if_available(cfg) -> str | None:
 
 
 def _check_report_summary(summary) -> tuple[bool, str]:
-    """报告结构化摘要校验：必备键存在 + total_score 0–100 + 四维键齐全（含别名容错）。"""
+    """报告结构化摘要校验：必备键存在 + total_score 0–100 + 四维键齐全（含别名容错）。
+
+    detail 追加原始 `summary`（minor-4：截断至 400 字符，保留断言口径不变），
+    便于人工判读模型实际返回的字段名/取值。
+    """
     if not isinstance(summary, dict):
         return False, f"summary={type(summary).__name__}"
     missing = [k for k in SUMMARY_KEYS if summary.get(k) is None]
@@ -158,9 +219,12 @@ def _check_report_summary(summary) -> tuple[bool, str]:
     )
     ok = not missing and ts_ok and not dim_missing
     dim_text = json.dumps(dims, ensure_ascii=False) if isinstance(dims, dict) else dims
+    raw = json.dumps(summary, ensure_ascii=False, default=str)
+    if len(raw) > 400:
+        raw = f"{raw[:400]}…(truncated, total {len(raw)} chars)"
     return ok, (
         f"missing={missing or '-'} total_score={ts}({type(ts).__name__}) "
-        f"dims={dim_text} dim_missing={dim_missing or '-'}"
+        f"dims={dim_text} dim_missing={dim_missing or '-'} | raw_summary={raw}"
     )
 
 
@@ -305,6 +369,90 @@ def p2_1(client: TestClient, cfg) -> None:
         f"mismatch: {', '.join(mism) if mism else '-'}",
     )
 
+    # 观察项（非门禁）：失败简历 retry 路径（R6），覆盖 POST /api/resumes/{id}/retry
+    failed: list[tuple[str, str]] = []
+    for fname in sorted(results):
+        rid = _uploaded_by_name.get(fname)
+        rec = store.get_resume(rid) if rid else None
+        if rec is not None and rec.status == FAILED:
+            failed.append((fname, rec.id))
+    _retry_observation(client, store, failed, cfg)
+
+
+def _make_failed_probe(store: ResumeStore, cfg) -> tuple[str, str] | None:
+    """构造 failed 简历探针（复制语料文件 + 入库后置 failed），供 retry 路径观察项使用。
+
+    仅当本次运行无 failed 简历时构造（复审建议允许「先构造」）。探针 id 记入 `_probe_ids`：
+    cleanup 会删记录 + 物理文件，但**不进入** `_uploaded_ids`，故不扰动 P2-1/P2-2/P2-5 取样口径。
+    """
+    srcs = sorted(CORPUS_DIR.glob("*.md"))
+    if not srcs:
+        return None
+    src = srcs[0]
+    rid = f"r-{uuid.uuid4().hex[:8]}"
+    dest_dir = PROJECT_ROOT / cfg.resume.upload_dir
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{rid}_{src.name}"
+    dest.write_bytes(src.read_bytes())
+    store.add_resume(rid, src.name, str(dest.relative_to(PROJECT_ROOT)), dest.stat().st_size)
+    store.update_failed(rid, "acceptance-probe：构造 failed 样本以覆盖 retry 路径")
+    _probe_ids.append(rid)
+    return src.name, rid
+
+
+def _retry_observation(
+    client: TestClient, store: ResumeStore, failed: list[tuple[str, str]], cfg
+) -> None:
+    """观察项（`kind="obs"`，不计入成功率门禁）：失败简历重试路径。
+
+    覆盖 `POST /api/resumes/{id}/retry`——该端点此前 pytest 与验收脚本均无覆盖，
+    对应 P2 需求 R6「失败保留原文件可重试」。判定：HTTP 200 且返回体状态为
+    processing/ready（TestClient 下响应体在后台任务执行前生成，故应为
+    `update_processing` 后的 processing），同时旁证原文件仍在磁盘（R6 前提）。
+    最终状态与耗时一并记录（重试若仍失败则落 failed，属如实记录，不影响门禁）。
+    本次运行无 failed 简历 → 构造探针覆盖该路径；构造失败才如实记录「未触发」。
+    """
+    item = "观察项｜P2-1 失败简历 retry 路径（R6：失败保留原文件可重试）"
+    source = "本次运行 failed 简历"
+    if not failed:
+        probe = _make_failed_probe(store, cfg)
+        if probe is None:
+            report.add(
+                item,
+                True,
+                "本次运行无 status=failed 简历且探针构造失败（无语料可复制）→ 该路径未触发",
+                kind="obs",
+            )
+            return
+        failed = [probe]
+        source = "构造探针（本次运行无 failed 简历）"
+
+    fname, rid = failed[0]
+    before = store.get_resume(rid)
+    try:  # R6 前提：失败保留原文件（相对项目根）
+        file_kept = bool(before and (PROJECT_ROOT / before.path).exists())
+    except Exception as e:  # noqa: BLE001 - 观察项不阻断门禁
+        file_kept = f"探测异常 {repr(e)[:60]}"
+    try:
+        t0 = time.time()
+        r = client.post(f"/api/resumes/{rid}/retry")
+        elapsed = time.time() - t0
+        resp_status = (r.json().get("resume") or {}).get("status")
+        after = store.get_resume(rid)
+        ok = r.status_code == 200 and resp_status in ("processing", "ready")
+        report.add(
+            item,
+            ok,
+            f"样本={source} file={fname} rid={rid} 原文件保留={file_kept} http={r.status_code} "
+            f"resp_status={resp_status} final_status={after.status if after else 'None'} "
+            f"耗时={elapsed:.1f}s" + (f" resp={r.text[:150]}" if r.status_code != 200 else ""),
+            kind="obs",
+        )
+    except Exception as e:  # noqa: BLE001 - 观察项不阻断门禁
+        report.add(
+            item, False, f"retry 调用异常（观察项，不影响门禁）：{repr(e)[:200]}", kind="obs"
+        )
+
 
 # ---------------------------------------------------------------------------
 # P2-2 考点清单 + 配比 + 简历来源出题（fake LLM）
@@ -333,15 +481,23 @@ def p2_2(client: TestClient, cfg) -> None:
     store = ResumeStore(PROJECT_ROOT / cfg.resume.db)
     ready, scope = _scoped_ready(store)
 
-    # 1) 考点清单 ≥10
-    below = [
-        f"{r.file_name}:{r.point_count}" for r in ready if (r.point_count or 0) < STD_POINT_COUNT
-    ]
-    report.add(
-        "P2-2 考点清单 ≥10 项",
-        bool(ready) and not below,
-        f"ready={len(ready)} scope={scope} below: {', '.join(below) if below else '-'}",
-    )
+    # 1) 考点清单 ≥10（minor-1：无 ready 简历属依赖缺失 → dep，不计入 failed）
+    if not ready:
+        _add_dep(
+            "P2-2 考点清单 ≥10 项",
+            "无可用 ready 简历（依赖 p2-1 上传语料；非应用缺陷）",
+        )
+    else:
+        below = [
+            f"{r.file_name}:{r.point_count}"
+            for r in ready
+            if (r.point_count or 0) < STD_POINT_COUNT
+        ]
+        report.add(
+            "P2-2 考点清单 ≥10 项",
+            not below,
+            f"ready={len(ready)} scope={scope} below: {', '.join(below) if below else '-'}",
+        )
 
     # 2) 配比纯函数复算（P2 设计 §5：tech 3 道 / beha 8 道 / comp 5 道，按 10 题计）
     cfg_ratios = {
@@ -365,8 +521,10 @@ def p2_2(client: TestClient, cfg) -> None:
 
     samples = ready[:3]  # F6：ready 仅含本次运行上传（或语料 stem 作用域），不带入用户数据
     if not samples:
-        report.add(
-            "P2-2 简历来源题干含考点关键词（注入链路一致性，≥80%）", False, "无 ready 简历可抽样"
+        # minor-1：依赖缺失（未先跑 p2-1 上传语料 / 语料全解析失败）→ 用法错误，不计入 failed
+        _add_dep(
+            "P2-2 简历来源题干含考点关键词（注入链路一致性，≥80%）",
+            "无可用 ready 简历可抽样（需先跑 p2-1 上传语料；非应用缺陷）",
         )
         return
     api_key = cfg.llm.api_key
@@ -539,8 +697,15 @@ def p2_4(client: TestClient, cfg) -> None:
 
     try:
         # 1) 配占位 Key → 打补丁 → 事实性回答 → assess 事件 verification 非空
+        # minor-3：原 assert 改为「记录 FAIL + return」（不抛 AssertionError 中断脚本）
         r = client.put("/api/settings/verify-key", json={"verify_key": P2_VERIFY_KEY})
-        assert r.status_code == 200, f"set verify-key http {r.status_code}: {r.text[:200]}"
+        if r.status_code != 200:
+            report.add(
+                "P2-4 事实核验（配置 Key + 补丁）",
+                False,
+                f"set verify-key http {r.status_code}: {r.text[:200]}",
+            )
+            return
         bocha_mod.BochaClient.search = _fake_search
 
         evts = _chat(client, sid, {"answer": answer})
@@ -562,16 +727,21 @@ def p2_4(client: TestClient, cfg) -> None:
         )
 
         # 2) 对照组：清 Key → 旁证 GET is_set=False → 提交**同一条 answer** → verification 为 null
+        item2 = "P2-4 未配置 Key 跳过核验（同一 answer 对照）"
         r = client.put("/api/settings/verify-key", json={"verify_key": ""})
-        assert r.status_code == 200, f"clear verify-key http {r.status_code}"
+        if r.status_code != 200:
+            report.add(item2, False, f"clear verify-key http {r.status_code}: {r.text[:200]}")
+            return
         key_state = client.get("/api/settings/verify-key").json()
-        assert key_state.get("is_set") is False, f"verify-key 未清空：{key_state}"
+        if key_state.get("is_set") is not False:
+            report.add(item2, False, f"verify-key 未清空：{key_state}")
+            return
 
         evts2 = _chat(client, sid, {"answer": answer})
         assesses2 = [d for ev, d in evts2 if ev == "assess"]
         v2 = assesses2[-1].get("verification") if assesses2 else "no-assess"
         report.add(
-            "P2-4 未配置 Key 跳过核验（同一 answer 对照）",
+            item2,
             v2 is None and key_state.get("is_set") is False,
             f"is_set={key_state.get('is_set')} answer_len={len(answer)} "
             f"verification={v2 if isinstance(v2, str) else 'null'}",
@@ -592,7 +762,12 @@ def p2_5(client: TestClient, cfg) -> None:
     store = ResumeStore(PROJECT_ROOT / cfg.resume.db)
     ready, scope = _scoped_ready(store)  # F6：本次运行上传的 ready 简历优先
     if not ready:
-        report.add("P2-5 端到端链路", False, "无可用 ready 简历（需先跑 p2-1 上传）")
+        # minor-1：依赖缺失（无本次上传且库内无语料 stem 的 ready 简历）→ 用法错误，
+        # 不计入 failed、不影响退出码；SUMMARY 中与「真实 FAIL」分列。
+        _add_dep(
+            "P2-5 端到端链路",
+            "无可用 ready 简历（本次无上传且库内无语料 stem 的 ready 简历；需先跑 p2-1 上传语料）",
+        )
         return
     rec = ready[0]
     print(f"[info] P2-5 取样简历={rec.file_name} scope={scope}")
@@ -635,26 +810,35 @@ def p2_5(client: TestClient, cfg) -> None:
         "我在订单系统里用 Redis 缓存热点数据，同时开启 AOF 保证重启后缓存可重建。"
     )
 
+    item_v = "P2-5 第 1 题核验触发（VerifyContext 全链路）"
     try:
         # F3-1：自设占位 verify-key + 补丁搜索 → 第 1 题真实触发核验（VerifyContext 全链路）
+        # minor-3：原 assert 改为「记录 FAIL + return」（不抛 AssertionError 中断脚本）
         r = client.put("/api/settings/verify-key", json={"verify_key": P2_VERIFY_KEY})
-        assert r.status_code == 200, f"set verify-key http {r.status_code}: {r.text[:200]}"
+        if r.status_code != 200:
+            report.add(item_v, False, f"set verify-key http {r.status_code}: {r.text[:200]}")
+            return
         key_state = client.get("/api/settings/verify-key").json()
-        assert key_state.get("is_set") is True, f"verify-key 未生效：{key_state}"
+        if key_state.get("is_set") is not True:
+            report.add(item_v, False, f"verify-key 未生效：{key_state}")
+            return
         bocha_mod.BochaClient.search = _fake_search
 
         # 第 1 题（技术面首题即简历来源题）→ 事实性回答
         evts = _chat(client, sid, {})
-        if any(ev == "error" for ev, _ in evts):
-            report.add("P2-5 端到端链路", False, "首题出题 error")
+        errs = [d for ev, d in evts if ev == "error"]
+        if errs:
+            report.add(
+                "P2-5 端到端链路",
+                False,
+                f"首题出题 error：{json.dumps(errs[-1], ensure_ascii=False)[:300]}",
+            )
             return
         evts = _chat(client, sid, {"answer": fact_answer})
         assesses = [d for ev, d in evts if ev == "assess"]
         errors = [d for ev, d in evts if ev == "error"]
         if not assesses:
-            report.add(
-                "P2-5 第 1 题核验触发（VerifyContext 全链路）", False, "答题后无 assess 事件"
-            )
+            report.add(item_v, False, "答题后无 assess 事件")
             return
         v = assesses[-1].get("verification")
         v_ok = (
@@ -666,18 +850,33 @@ def p2_5(client: TestClient, cfg) -> None:
         )
         v_text = json.dumps(v, ensure_ascii=False) if v else "null"
         report.add(
-            "P2-5 第 1 题核验触发（VerifyContext 全链路）",
+            item_v,
             v_ok,
-            f"kb={kb_id or 'None'} verification={v_text}",
+            f"kb={kb_id or 'None'} verification={v_text}"
+            + (f" errors={json.dumps(errors[-1], ensure_ascii=False)[:200]}" if errors else ""),
         )
 
         # 其余题 skip（自适应：最后一题 skip 会自动出报告并置 finished）
+        # minor-2：命中 error 事件时先记录该 error 内容（门禁项）再 break，
+        # 避免「题推进失败但报告断言仍 PASS」被掩盖。
+        skip_err: str | None = None
         for _ in range(10):
             if _session_status(client, sid) == "finished":
                 break
             evts = _chat(client, sid, {"action": "skip"})
-            if any(ev == "error" for ev, d in evts):
+            skip_errors = [d for ev, d in evts if ev == "error"]
+            if skip_errors:
+                skip_err = json.dumps(skip_errors[-1], ensure_ascii=False)[:300]
                 break
+        report.add(
+            "P2-5 skip 推进（无 error 事件）",
+            skip_err is None,
+            (
+                f"skip 返回 error（题目推进失败，后续报告断言不可信）：{skip_err}"
+                if skip_err
+                else "skip 全程无 error 事件"
+            ),
+        )
 
         # 收口：未结束 → 显式 finish；已结束（末题 skip 自动出报告）→ 直接取报告
         if _session_status(client, sid) == "finished":
@@ -725,7 +924,7 @@ def _purge_upload_files(cfg) -> None:
     base = PROJECT_ROOT / cfg.resume.upload_dir
     if not base.is_dir():
         return
-    for rid in dict.fromkeys(_uploaded_ids):
+    for rid in dict.fromkeys([*_uploaded_ids, *_probe_ids]):
         for f in base.glob(f"{rid}_*"):
             try:
                 f.unlink(missing_ok=True)
@@ -739,7 +938,7 @@ def cleanup(client: TestClient, cfg) -> None:
             client.delete(f"/api/sessions/{sid}")
         except Exception as e:  # noqa: BLE001 - 清理失败仅告警
             print(f"cleanup warn: session {sid} {repr(e)[:100]}")
-    for rid in _uploaded_ids:
+    for rid in [*_uploaded_ids, *_probe_ids]:  # 探针记录同样清理（不留残留）
         try:
             client.delete(f"/api/resumes/{rid}")
         except Exception as e:  # noqa: BLE001 - 清理失败仅告警
@@ -777,24 +976,42 @@ def main() -> None:
     cfg = load_config()
 
     with TestClient(app) as client:
+        steps = {
+            "p2-1": lambda: p2_1(client, cfg),
+            "p2-2": lambda: p2_2(client, cfg),
+            "p2-3": lambda: p2_3(cfg),
+            "p2-4": lambda: p2_4(client, cfg),
+            "p2-5": lambda: p2_5(client, cfg),
+        }
         try:
-            if "p2-1" in checks:
-                p2_1(client, cfg)
-            if "p2-2" in checks:
-                p2_2(client, cfg)
-            if "p2-3" in checks:
-                p2_3(cfg)
-            if "p2-4" in checks:
-                p2_4(client, cfg)
-            if "p2-5" in checks:
-                p2_5(client, cfg)
+            for name in checks:
+                try:
+                    steps[name]()
+                except Exception as e:  # noqa: BLE001 - minor-3：单检查项异常不中断全量运行
+                    report.add(
+                        f"{name} 执行异常（该检查项中断，后续项仍继续）", False, repr(e)[:300]
+                    )
         finally:
             if not args.keep:
                 cleanup(client, cfg)
 
-    ok, failed = report.summary()
-    print(f"\n== P2 ACCEPTANCE SUMMARY == passed={ok} failed={failed}")
-    sys.exit(0 if failed == 0 else 1)
+    s = report.summary()
+    print("\n== P2 ACCEPTANCE SUMMARY ==")
+    print(f"门禁项 gate：passed={s['gate_passed']} failed={s['gate_failed']}（决定退出码）")
+    print(
+        f"观察项 observe：total={s['obs_total']} failed={s['obs_failed']}"
+        "（不计入 P2-1 成功率与退出码，仅提示）"
+    )
+    print(f"依赖缺失/用法错误 dep：total={s['dep_total']}（usage-error，不计入 failed）")
+    for i in report.items:
+        if i["kind"] == "dep":
+            print(f"  [dep] {i['item']} | {i['data']}")
+    if s["gate_failed"]:
+        print("真实 FAIL 明细（门禁项）：")
+        for i in report.items:
+            if i["kind"] == "gate" and not i["passed"]:
+                print(f"  [gate-FAIL] {i['item']} | {i['data']}")
+    sys.exit(0 if s["gate_failed"] == 0 else 1)
 
 
 if __name__ == "__main__":
