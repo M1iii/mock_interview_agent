@@ -106,7 +106,7 @@ export interface ReportSummary {
   strengths: string[]
   weaknesses: string[]
   review: { question: string; answer: string; comment: string }[]
-  verified: string[] | null
+  verified: { question: string; reason: string }[] | null
 }
 
 export interface ReportInfo {
