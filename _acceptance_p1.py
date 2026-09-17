@@ -47,7 +47,7 @@ _GOLD: dict[str, str] = {}  # qid -> gold_parent_id
 _TIMINGS: list[float] = []  # P1-6 采样
 
 
-def _locate_gold(es, q: dict) -> str | None:
+def _locate_gold(es, q: dict, kb: str | None = None) -> str | None:
     client = es.get_client()
     resp = client.search(
         index=es.index,
@@ -59,7 +59,9 @@ def _locate_gold(es, q: dict) -> str | None:
                     # parent 块内，改用 match（整段句子）定位语义不变（已验证 50/50 且
                     # 返回的 parent 均逐字包含该 snippet）。
                     {"match": {"text": q["gold_snippet"]}},
-                    {"term": {"kb_id": kb_id}},
+                    # kb 参数：P1-7 在独立库 kb2 中定位 gold（主库 P1-5 已删空，gold
+                    # snippet 只存在于 kb2 的 ES 文档）；默认仍按主验收库过滤（p1_2 不变）。
+                    {"term": {"kb_id": kb or kb_id}},
                 ]
             }
         },
@@ -118,16 +120,20 @@ def main() -> None:
     sys.exit(0 if failed == 0 else 1)
 
 
-def _ingest_file(store, qdrant, es, embedding, cfg, path: Path) -> tuple[bool, str]:
+def _ingest_file(
+    store, qdrant, es, embedding, cfg, path: Path, kb: str | None = None
+) -> tuple[bool, str]:
     from app.retrieval.ingest import file_id_of, ingest_document
 
+    # kb 参数：P1-7 向独立库 kb2 入库（控制器裁决 1）；默认仍用主验收库（p1_1 调用不变）
+    target = kb or kb_id
     file_id = file_id_of(path)
     # 幂等重跑：kb_files.file_id 全表唯一（id = f-{file_id}），重入库复用原记录而非重复 INSERT
     record = store.get_file(f"f-{file_id}")
     if record is None:
-        record = store.add_file(kb_id, file_id, path.name, str(path), path.stat().st_size)
+        record = store.add_file(target, file_id, path.name, str(path), path.stat().st_size)
     try:
-        result = ingest_document(path, qdrant, es, embedding, cfg, kb_id=kb_id)
+        result = ingest_document(path, qdrant, es, embedding, cfg, kb_id=target)
         store.update_file_status(record.id, READY, block_count=result.child_count)
         return True, f"parents={result.parent_count} children={result.child_count}"
     except Exception as e:  # noqa: BLE001 - 验收统计失败文件
@@ -357,11 +363,71 @@ def p1_6() -> None:
 
 
 def p1_7(store, qdrant, es, cfg) -> None:
-    raise NotImplementedError
+    from app.retrieval.embedding import OpenAICompatEmbedding
+    from app.retrieval.tasks import rebuild_all_background
+
+    # 建一个独立验收库（P1-5 可能已清空主库，自给自足）
+    kb2 = f"{kb_id}-switch"
+    store.create_kb(kb2, "acceptance-switch", "bge-large-zh-v1.5", 1024)
+    embedding = OpenAICompatEmbedding(cfg)  # 与 main 同源
+    for p in sorted(CORPUS_DIR.glob("*.md")):
+        ok, _ = _ingest_file(store, qdrant, es, embedding, cfg, p, kb=kb2)
+        if not ok:
+            report.add("P1-7 切换前入库", False, p.name)
+            return
+
+    # 切换：构造新 embedding 实例（model_id 标记为切换后模型；TEI 忽略 model 字段，向量仍可用）
+    switched = OpenAICompatEmbedding(cfg)
+    switched._configured_model = "bge-large-zh-v1.5-switched"
+    switched._configured_dims = 1024
+    res = rebuild_all_background(store, qdrant, es, switched, cfg)
+    kbs = store.list_kbs()
+    # 绑定断言以 kb2 为准（控制器裁决 2：环境可能残留无关库，不能对全库 all(...)）
+    kb2_binding = next((k for k in kbs if k.id == kb2), None)
+    binding_ok = (
+        kb2_binding is not None
+        and kb2_binding.model_id == "bge-large-zh-v1.5-switched"
+        and kb2_binding.dims == 1024
+    )
+    files_ok = all(f.status == READY for f in store.list_all_files())
+
+    # 抽样 5 题验证检索正常（绑定已与当前模型一致；gold 在 kb2 中定位）
+    sample = QUESTIONS[:5]
+    hit = 0
+    for q in sample:
+        gid = _locate_gold(es, q, kb=kb2)
+        if gid is None:
+            continue
+        r = retrieve(q["query"], kb2, cfg, qdrant, es, switched)
+        hit += any(c.parent_id == gid for c in r.citations)
+    report.add(
+        "P1-7 切换重建 + 绑定一致",
+        res["failed"] == 0 and binding_ok and files_ok and hit >= 4,
+        f"rebuild ok={res['ok']} failed={res['failed']} binding_ok={binding_ok} "
+        f"files_ok={files_ok} sample_hit={hit}/5",
+    )
+    report.add(
+        "P1-7 观察项：查询模型≠绑定模型拒绝校验未实现",
+        False,
+        "architecture v0.4 §4.3 约束在检索链路无实现；已记录，交用户裁决是否补实现",
+    )
+    # 清理切换库（不 unlink 语料文件——理由同 P1-5 注释：path 是 git 受控语料真实路径）
+    for f in store.delete_kb(kb2):
+        from app.retrieval.ingest import delete_document
+
+        delete_document(f.file_id, qdrant, es)
 
 
 def cleanup(store, qdrant, es) -> None:
-    raise NotImplementedError
+    from app.retrieval.ingest import delete_document
+
+    files = store.delete_kb(kb_id)
+    for f in files:
+        try:
+            delete_document(f.file_id, qdrant, es)
+        except Exception as e:  # noqa: BLE001
+            print(f"cleanup warn: {f.name} {repr(e)[:100]}")
+    print(f"cleanup: kb {kb_id} removed ({len(files)} files)")
 
 
 if __name__ == "__main__":
