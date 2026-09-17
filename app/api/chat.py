@@ -366,7 +366,7 @@ async def chat(
                             ask_question_node,
                             state,
                             llm,
-                            handler,
+                            [handler],
                             request.app.state.retrieval,
                             request.app.state.resume_store,
                             request.app.state.config,

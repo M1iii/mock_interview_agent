@@ -73,6 +73,50 @@ async def test_skip_advances_to_next_question():
             assert "第二题" in body
 
 
+async def test_skip_non_last_question_passes_callback_list():
+    """回归（P2 Task 11 验收暴露）：跳过非末题后必须能生成下一题题干。
+
+    缺陷：skip 分支曾把裸 handler 作为 callbacks 传给 ask_question_node，
+    langchain ensure_config 复制 callbacks 时调用无 copy() 的 handler 抛
+    AttributeError，导致下一题题干无法生成（SSE error）。
+
+    本用例的 fake LLM 在 callbacks 非 list 时直接抛 TypeError，修复前必然失败；
+    修复后 skip 分支传 [handler]，与图路径/pytest 路径一致。
+    """
+    async with app.router.lifespan_context(app):
+        seen_callbacks: list = []
+
+        def mock_complete(api_key, prompt, callbacks=None):
+            seen_callbacks.append(callbacks)
+            if callbacks is not None and not isinstance(callbacks, list):
+                raise TypeError("callbacks 必须是列表")
+            return (QUESTION_JSON, {"total_tokens": 10})
+
+        mock_llm = MagicMock()
+        mock_llm.complete_sync = mock_complete
+        app.state.llm_client = mock_llm
+        app.state.compiled_graph = compile_graph(mock_llm, app.state.checkpointer)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.put("/api/settings/api-key", json={"api_key": "sk-testkey123456"})
+            create_resp = await client.post(
+                "/api/sessions", json={"scene": "intern", "question_count": 5}
+            )
+            session_id = create_resp.json()["id"]
+
+            await client.post(f"/api/chat/{session_id}", json={})  # 第 1 题
+            # 跳过第 1 题（非末题）→ 必须出第 2 题
+            resp = await client.post(f"/api/chat/{session_id}", json={"action": "skip"})
+            body = resp.content.decode("utf-8")
+
+            assert "event: error" not in body
+            assert "event: done" in body
+            assert "什么是多态" in body
+            assert isinstance(seen_callbacks[-1], list), (
+                f"skip 分支 callbacks 应为列表，实际为 {type(seen_callbacks[-1])}"
+            )
+
+
 async def test_skip_last_question_generates_report():
     """skip 最后一题：直接生成报告并结束。"""
     async with app.router.lifespan_context(app):
