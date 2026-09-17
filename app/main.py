@@ -41,6 +41,9 @@ async def lifespan(app: FastAPI):
     if cfg.llm.api_key:
         # P2-3：重启后用 .env 的 LLM_API_KEY 恢复全局 Key，会话快照缺失时回退它
         app.state.key_store.set_global_key(cfg.llm.api_key)
+    if cfg.verify.get("api_key"):
+        # 修复轮：同样用 .env 的 VERIFY_API_KEY 种子搜索 Key（运行期仍可被配置页覆盖）
+        app.state.key_store.set_verify_key(cfg.verify.api_key)
     app.state.session_store = SqliteSessionStore(PROJECT_ROOT / cfg.interview.db)
     app.state.knowledge_store = KnowledgeStore(PROJECT_ROOT / cfg.retrieval.kb_db)
     app.state.resume_store = ResumeStore(PROJECT_ROOT / cfg.resume.db)
@@ -54,6 +57,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.retrieval = retrieval_ctx
     verify_ctx = VerifyContext(app.state.llm_client, cfg, app.state.key_store)
+    app.state.verify_ctx = verify_ctx  # 供验收/诊断断言 Key 通路（图用的是同一实例）
     app.state.compiled_graph = compile_graph(
         app.state.llm_client,
         app.state.checkpointer,

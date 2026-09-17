@@ -67,25 +67,58 @@ class Verification:
 
 
 class VerifyContext:
-    """评估节点核验注入组件（图构建时注入，测试可替换为 fake）。"""
+    """评估节点核验注入组件（图构建时注入，测试可替换为 fake）。
+
+    Key 解析（最终审查修复轮，BLOCKER）：**惰性按当前 Key 解析**搜索客户端，
+    而不是构造时一次性固化。原因：verify key 只在运行期经
+    `PUT /api/settings/verify-key` 写入 KeyStore，lifespan 构造本对象时通常为空
+    （仅当 .env 配了 VERIFY_API_KEY 才有种子）；若构造时固化，配置页设置的 Key
+    永远到不了客户端 → search() 恒抛 BochaError → 核验恒降级为「搜索无可用信源」。
+    解析顺序：KeyStore 运行期 Key → cfg.verify.api_key（.env 回退）；两者皆空 → 跳过。
+    客户端按 Key 缓存，Key 变化才重建（避免每题重建）。
+    """
 
     def __init__(self, llm: DeepSeekClient, cfg, key_store, bocha=None) -> None:
         self._llm = llm
         self._cfg = cfg
         self._key_store = key_store
-        self._bocha = bocha or BochaClient(
-            key_store.get_verify_key() or "",
-            base_url=cfg.verify.get("base_url", DEFAULT_BASE_URL),
-            timeout=float(cfg.verify.get("timeout", 10.0)),
-        )
+        self._bocha = bocha  # 注入的 fake 优先（测试用），不做缓存/重建
+        self._client: BochaClient | None = None
+        self._client_key: str | None = None
+
+    def resolve_key(self) -> str:
+        """当前生效的搜索 Key（KeyStore 优先，回退 cfg.verify.api_key）。"""
+        stored = self._key_store.get_verify_key()
+        if stored and stored.strip():
+            return stored.strip()
+        cfg_key = self._cfg.verify.get("api_key")
+        return str(cfg_key).strip() if cfg_key else ""
+
+    def _search_client(self) -> BochaClient | None:
+        """按当前 Key 解析搜索客户端；Key 为空返回 None（静默跳过核验）。"""
+        if self._bocha is not None:
+            return self._bocha
+        key = self.resolve_key()
+        if not key:
+            return None
+        if self._client is None or self._client_key != key:
+            self._client = BochaClient(
+                key,
+                base_url=self._cfg.verify.get("base_url", DEFAULT_BASE_URL),
+                timeout=float(self._cfg.verify.get("timeout", 10.0)),
+            )
+            self._client_key = key
+        return self._client
 
     def verify(self, api_key: str, answer: str) -> Verification | None:
-        """核验一条回答；返回 None 表示跳过（无 Key / 非事实性）。
+        """核验一条回答；返回 None 表示跳过（未启用 / 无 Key / 非事实性）。
 
         异常（搜索失败/LLM 失败）一律降级：返回 unconfirmed 或 None，不向评估抛错。
         """
-        verify_key = self._key_store.get_verify_key()
-        if not verify_key:
+        if self._cfg.verify.get("enabled", True) is False:
+            return None  # 配置页/环境变量关闭联网核验
+        bocha = self._search_client()
+        if bocha is None:
             return None  # 未配置搜索 Key → 静默跳过（设计 §6 降级）
         if not answer or not answer.strip():
             return None
@@ -108,7 +141,7 @@ class VerifyContext:
         sources: list[dict] = []
         for claim in claims:
             try:
-                for r in self._bocha.search(claim, count=int(self._cfg.verify.top_k)):
+                for r in bocha.search(claim, count=int(self._cfg.verify.top_k)):
                     if r.url:
                         sources.append({"title": r.title, "url": r.url, "snippet": r.snippet})
             except BochaError as e:
