@@ -248,12 +248,99 @@ def p1_3(ctx, cfg) -> None:
     )
 
 
+class _UnavailableQdrant:
+    """检索不可用 stub：语义路降级（retrieve 捕获 RetrievalUnavailable 跳过）。"""
+
+    def get_client(self):
+        from app.retrieval import RetrievalUnavailable
+
+        raise RetrievalUnavailable("disabled for acceptance")
+
+
+class _UnavailableES:
+    """检索不可用 stub：关键词路降级（retrieve 捕获 RetrievalUnavailable 跳过）。"""
+
+    def get_client(self):
+        from app.retrieval import RetrievalUnavailable
+
+        raise RetrievalUnavailable("disabled for acceptance")
+
+
 def p1_4(ctx) -> None:
-    raise NotImplementedError
+    from app.retrieval.retrieve import FALLBACK, NORMAL, WEAK
+
+    normal_q = QUESTIONS[0]["query"]  # 正常知识点：预期 normal/weak
+    unrelated_q = "今天天气怎么样明天会下雨吗"  # 无关：预期 decline
+    dual = retrieve(normal_q, kb_id, ctx.cfg, ctx.qdrant, ctx.es, ctx.embedding)
+    es_only = retrieve(normal_q, kb_id, ctx.cfg, _UnavailableQdrant(), ctx.es, ctx.embedding)
+    sem_only = retrieve(normal_q, kb_id, ctx.cfg, ctx.qdrant, _UnavailableES(), ctx.embedding)
+    decline = retrieve(unrelated_q, kb_id, ctx.cfg, ctx.qdrant, ctx.es, ctx.embedding)
+
+    checks = [
+        (
+            "双路命中 → normal/weak 且引用非空",
+            dual.level in (NORMAL, WEAK) and bool(dual.citations),
+            f"level={dual.level} cites={len(dual.citations)}",
+        ),
+        ("仅语义路 → fallback", sem_only.level == FALLBACK, f"level={sem_only.level}"),
+        ("仅关键词路 → fallback", es_only.level == FALLBACK, f"level={es_only.level}"),
+        (
+            "无关查询 → decline 且引用空",
+            decline.level == "decline" and not decline.citations,
+            f"level={decline.level}",
+        ),
+    ]
+    for name, passed, data in checks:
+        report.add(f"P1-4 {name}", passed, data)
+
+
+def _qdrant_count(qdrant, qfilter) -> int:
+    client = qdrant.get_client()
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    return client.count(
+        collection_name=qdrant.collection,
+        count_filter=Filter(
+            must=[FieldCondition(key=k, match=MatchValue(value=v)) for k, v in qfilter.items()]
+        ),
+        exact=True,
+    ).count
+
+
+def _es_count(es, qfilter) -> int:
+    client = es.get_client()
+    must = [{"match": {k: v}} for k, v in qfilter.items()]
+    return client.count(index=es.index, query={"bool": {"must": must}})["count"]
 
 
 def p1_5(store, qdrant, es, cfg) -> None:
-    raise NotImplementedError
+    from app.retrieval.ingest import delete_document, file_id_of
+
+    # 文件级：删第一篇
+    first = sorted(CORPUS_DIR.glob("*.md"))[0]
+    fid = file_id_of(first)
+    delete_document(fid, qdrant, es)
+    qc = _qdrant_count(qdrant, {"kb_id": kb_id, "file_id": fid})
+    ec = _es_count(es, {"kb_id": kb_id, "file_id": fid})
+    report.add(
+        "P1-5 文件级删除级联（Qdrant+ES 0 命中）", qc == 0 and ec == 0, f"qdrant={qc} es={ec}"
+    )
+
+    # 库级：删除整个库（模拟 API 级联：delete_kb → delete_document 循环）
+    # 注意：此处不 unlink 语料文件——store.add_file 记录的 path 是
+    # tests/acceptance/corpus/*.md 的真实路径（git 受控），unlink 会误删语料，
+    # 破坏重跑与工作区；删除级联只清 Qdrant/ES 向量与索引，保留源文件。
+    files = store.delete_kb(kb_id)
+    for f in files:
+        delete_document(f.file_id, qdrant, es)
+    qc = _qdrant_count(qdrant, {"kb_id": kb_id})
+    ec = _es_count(es, {"kb_id": kb_id})
+    meta_left = store.get_kb(kb_id) is not None
+    report.add(
+        "P1-5 库级删除级联（三处 0 残留）",
+        qc == 0 and ec == 0 and not meta_left,
+        f"qdrant={qc} es={ec} meta_left={meta_left}",
+    )
 
 
 def p1_6() -> None:
