@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-09-19 · dev.ps1 一键启动脚本（自动拉起 Docker 检索容器 + 前后端）
+
+**描述**：新增根目录 `dev.ps1`，将「docker compose up -d（检索三件套 Qdrant/ES/TEI）→ 后端 :8000 → 前端 :5173」三条手动命令收敛为一条命令；退出（Ctrl+C）时停止前后端子进程并按默认 `docker compose down` 连容器一起停（`-KeepDocker` 可保留）。设计文档：`docs/superpowers/specs/2026-09-19-dev-script-design.md`。
+- 流程：前置检查（venv / node_modules）→ Docker 阶段（失败降级告警不阻塞，与 PRD「缺失时降级」一致）→ 端口健康汇总（6333/9200/8081）→ 后端（uvicorn :8000）→ 前端（vite :5173）→ 就绪轮询 → 主等待循环（`[Console]::CancelKeyPress` 置停止标志 / 子进程退出即 break）→ `finally` 清理（taskkill /T 停进程树 + 按 `-KeepDocker` 决定是否 `docker compose down`）
+- 参数：`-SkipDocker`（跳过 Docker 阶段与健康探测）、`-KeepDocker`（退出时保留容器）、`-Port`（后端端口，透传 `PORT`，前端代理同步）、`-AutoExitSeconds`（测试钩子，全部就绪后 N 秒自动走清理流程退出）
+- 实现侧微调（验证中发现）：`[Console]::CancelKeyPress` 注册加 try/catch（非交互宿主降级告警）；docker 输出改经 `cmd /c` 捕获（避免 `$ErrorActionPreference=Stop` 下 stderr 被抛为终止异常）
+
+**验证结果**：三条路径实际运行通过（均退出码 0、8000/5173 端口清理干净）——① 降级路径（Docker daemon 未运行）：docker 失败告警 + 前后端照常就绪；② `-SkipDocker`：跳过提示出现、无 docker 告警；③ `-KeepDocker`：降级告警正常、不误触保留/down 分支。Docker 正常路径（容器实际拉起 + 退出 down）待 Docker Desktop 就绪后人工确认。
+
+**项目结构更新**
+- 新增：`dev.ps1`（一键启动脚本）
+
 ## 2026-09-18 · P2 充值后验收复跑确认（门禁 15/15，证据恢复）
 
 **描述**：上一轮 P2 收尾清理时全量验收被 DeepSeek 账户余额不足（HTTP 402）外部阻塞；用户充值后本轮全量复跑 `_acceptance_p2.py`，**LLM 依赖门禁全部恢复 PASS，15/15 证据完整恢复**。本轮**无任何 `app/` 代码改动**，仅文档同步（§3 / §5 / limitation F1 / CHANGELOG）。
