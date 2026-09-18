@@ -201,7 +201,7 @@ onMounted(() => {
         <div class="summary-head">
           <div
             class="score-ring"
-            :style="{ background: `conic-gradient(var(--primary) ${scorePct}%, var(--border) 0)` }"
+            :style="{ background: `conic-gradient(var(--soft-accent) ${scorePct}%, oklch(90% 0.015 280) 0)` }"
           >
             <div class="score-ring-inner">
               <b>{{ summary.total_score }}</b>
@@ -315,11 +315,13 @@ onMounted(() => {
 }
 
 .summary {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
-  padding: 28px 32px;
+  background: var(--soft-surface);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid oklch(100% 0 0 / 0.6);
+  border-radius: var(--r-xl);
+  box-shadow: var(--soft-shadow-md);
+  padding: 32px 36px;
 }
 
 .summary-head {
@@ -343,23 +345,29 @@ onMounted(() => {
   width: 92px;
   height: 92px;
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--soft-surface-solid);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 8px oklch(55% 0.15 280 / 0.1) inset;
 }
 
 .score-ring-inner b {
   font-size: 30px;
   font-weight: 800;
   line-height: 1;
+  background: var(--soft-accent-grad);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .score-ring-inner span {
   font-size: 12px;
-  color: var(--text-3);
+  color: var(--soft-faint);
   margin-top: 4px;
+  font-weight: 500;
 }
 
 .dim-bars {
@@ -386,22 +394,24 @@ onMounted(() => {
   flex: 1;
   height: 8px;
   border-radius: var(--r-full);
-  background: var(--border);
+  background: oklch(90% 0.015 280);
   overflow: hidden;
 }
 
 .dim-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(135deg, var(--primary), #a78bfa);
+  background: var(--soft-accent-grad);
   transition: width 0.4s var(--ease-out);
 }
 
 .dim-bar-value {
   width: 40px;
   text-align: right;
-  color: var(--text-2);
+  color: var(--soft-muted);
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12px;
 }
 
 .summary-cols {
@@ -418,11 +428,11 @@ onMounted(() => {
 }
 
 .col-title.good {
-  color: #34c77b;
+  color: oklch(52% 0.16 145);
 }
 
 .col-title.warn {
-  color: var(--warning);
+  color: oklch(60% 0.15 70);
 }
 
 .col-list {

@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { deleteResume, listResumes, retryResume, uploadResume } from '../api/client'
 import type { Resume, ResumeStatus } from '../api/types'
-
-const router = useRouter()
 
 const resumes = ref<Resume[]>([])
 const loading = ref(false)
@@ -94,10 +91,6 @@ function formatSize(size: number): string {
   return `${Math.max(1, Math.round(size / 1024))} KB`
 }
 
-function goHome() {
-  router.push('/')
-}
-
 onMounted(async () => {
   await load()
   startPolling()
@@ -109,16 +102,14 @@ onUnmounted(stopPolling)
 <template>
   <div class="page resumes">
     <header class="resume-header">
-      <button class="btn btn-ghost" @click="goHome">← 返回</button>
-      <h1 class="page-title">简历管理</h1>
+      <div>
+        <h1 class="page-title">简历管理</h1>
+        <p class="page-sub">上传简历，自动解析并抽取考点清单，供面试出题使用</p>
+      </div>
       <button class="btn btn-primary" :disabled="uploading" @click="pickFile">
         {{ uploading ? '上传中…' : '上传简历' }}
       </button>
     </header>
-
-    <p class="page-sub">
-      上传简历（PDF / DOCX / MD / TXT，≤20MB），自动解析并抽取考点清单，供面试出题使用。
-    </p>
 
     <p v-if="error" class="error">{{ error }}</p>
 
@@ -170,14 +161,17 @@ onUnmounted(stopPolling)
 
 .resume-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .resume-header .page-title {
-  margin: 0;
-  flex: 1;
+  margin: 0 0 4px;
+}
+
+.resume-header .page-sub {
+  margin-bottom: 0;
 }
 
 .resume-list {
@@ -228,18 +222,21 @@ onUnmounted(stopPolling)
 }
 
 .st-processing {
-  background: #fef9c3;
-  color: #a16207;
+  background: var(--warning-bg);
+  color: oklch(55% 0.16 70);
+  font-weight: 600;
 }
 
 .st-ready {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--success-bg);
+  color: oklch(48% 0.14 145);
+  font-weight: 600;
 }
 
 .st-failed {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--danger-bg);
+  color: oklch(50% 0.2 25);
+  font-weight: 600;
 }
 
 .resume-meta {

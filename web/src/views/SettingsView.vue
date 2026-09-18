@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { getApiKey, getEmbeddingConfig, getVerifyKey, setApiKey, setEmbeddingConfig, setVerifyKey } from '../api/client'
 import type { EmbeddingConfig } from '../api/types'
-
-const router = useRouter()
 
 const keyInput = ref('')
 const masked = ref('')
@@ -174,17 +171,13 @@ async function confirmSwitch() {
     switching.value = false
   }
 }
-
-function goHome() {
-  router.push('/')
-}
 </script>
 
 <template>
   <div class="page settings">
     <header class="settings-header">
-      <button class="btn btn-ghost" @click="goHome">← 返回</button>
       <h1 class="page-title">环境配置</h1>
+      <p class="page-sub">配置 LLM、知识库 Embedding 与联网核验所需的参数</p>
     </header>
 
     <div class="card settings-card">
@@ -367,30 +360,29 @@ function goHome() {
 }
 
 .settings-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .settings-header .page-title {
-  margin: 0;
+  margin: 0 0 4px;
 }
 
 .settings-card {
-  padding: 28px;
-  margin-bottom: 20px;
+  padding: 24px 28px;
+  margin-bottom: 16px;
 }
 
 .card-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  color: var(--soft-ink);
+  letter-spacing: -0.01em;
 }
 
 .card-desc {
-  font-size: 14px;
-  color: var(--text-2);
+  font-size: 13px;
+  color: var(--soft-muted);
   line-height: 1.6;
   margin-bottom: 20px;
 }
@@ -402,7 +394,7 @@ function goHome() {
 .field-hint {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--text-3);
+  color: var(--soft-faint);
 }
 
 .current-key {
@@ -410,28 +402,29 @@ function goHome() {
   align-items: center;
   gap: 8px;
   margin-top: 14px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .current-label {
-  color: var(--text-2);
+  color: var(--soft-muted);
 }
 
 .masked {
   font-family: 'JetBrains Mono', Consolas, monospace;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: oklch(97% 0.012 280);
+  border: 1px solid var(--soft-hairline);
   padding: 2px 10px;
   border-radius: 6px;
-  color: var(--text-1);
+  color: var(--soft-ink);
 }
 
 .ok-badge {
-  font-size: 12px;
+  font-size: 11px;
   padding: 2px 10px;
   border-radius: var(--r-full);
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--success-bg);
+  color: oklch(48% 0.14 145);
+  font-weight: 600;
 }
 
 .error {
@@ -455,15 +448,16 @@ function goHome() {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  font-size: 14px;
-  color: var(--text-2);
+  font-size: 13px;
+  color: var(--soft-muted);
   line-height: 1.6;
 }
 
 .note-list code {
   font-family: 'JetBrains Mono', Consolas, monospace;
-  background: var(--surface-2);
+  background: oklch(97% 0.012 280);
   padding: 1px 6px;
   border-radius: 4px;
+  color: var(--soft-ink);
 }
 </style>

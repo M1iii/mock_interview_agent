@@ -45,6 +45,11 @@ const kbLabel = computed(() => {
   return kb ? kb.name : '已关联'
 })
 
+const resumeLabel = computed(() => {
+  if (!session.value?.resume_id) return '未关联'
+  return '已关联'
+})
+
 const progressPct = computed(() => {
   if (!session.value) return 0
   const done = Math.min(questionIndex.value, session.value.question_count)
@@ -89,11 +94,9 @@ function appendAi(content: string, streaming = false): Msg {
 function handleEvent(e: SSEEvent, streamingMsg?: Msg) {
   if (e.event === 'status') {
     if (e.kind === 'thinking') {
-      // 静默期占位：空消息由模板渲染「正在思考…」，首 token 到达后自然替换
       if (!streamingMsg) streamingMsg = appendAi('', true)
       void scrollToBottom()
     } else {
-      // 报告生成占位：图执行期间先展示，生成完成后由 token 一次性替换
       if (streamingMsg) {
         streamingMsg.content = e.message ?? REPORT_PENDING
         streamingMsg.streaming = true
@@ -114,7 +117,6 @@ function handleEvent(e: SSEEvent, streamingMsg?: Msg) {
   } else if (e.event === 'error') {
     busy.value = false
     if (streamingMsg && streamingMsg.content === '' && streamingMsg.streaming) {
-      // 请求失败：移除空的「正在思考…」占位气泡
       const idx = messages.value.indexOf(streamingMsg)
       if (idx >= 0) messages.value.splice(idx, 1)
     }
@@ -164,7 +166,6 @@ async function startFirst() {
 }
 
 function onInputKeydown(e: KeyboardEvent) {
-  // 中文输入法组合中回车用于确认拼音，不发送
   if (e.isComposing || e.keyCode === 229) return
   if (!e.shiftKey) {
     e.preventDefault()
@@ -176,7 +177,7 @@ function autoGrow() {
   const el = inputEl.value
   if (!el) return
   el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+  el.style.height = `${Math.min(el.scrollHeight, 160)}px`
 }
 
 function resetInputHeight() {
@@ -270,6 +271,10 @@ onUnmounted(() => {
 function sceneLabel(scene: string): string {
   return scene === 'intern' ? '实习' : '全职'
 }
+
+function interviewTypeLabel(type?: string): string {
+  return { technical: '技术面', behavioral: '行为面', comprehensive: '综合面' }[type ?? 'technical'] ?? '技术面'
+}
 </script>
 
 <template>
@@ -277,19 +282,29 @@ function sceneLabel(scene: string): string {
     <div class="chat-layout">
       <div class="chat-main">
         <header class="chat-header">
-          <button class="btn btn-ghost back-btn" @click="backToList">← 会话列表</button>
+          <button class="back-btn" @click="backToList">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            会话列表
+          </button>
           <div class="chat-title">
             <h1 class="chat-heading">
               {{ session?.title ?? 'AI 面试官' }}
             </h1>
             <span v-if="session" class="chat-sub">
-              <span class="type-chip">{{ sceneLabel(session.scene) }}</span>
-              <span class="status-badge ongoing">进行中</span>
-              · {{ session.question_count }} 题
-              <span v-if="hintUsed" class="hint-used"> · 已用提示</span>
+              <span class="badge badge-info">{{ sceneLabel(session.scene) }} · {{ interviewTypeLabel(session.interview_type) }}</span>
+              <span class="badge badge-success">进行中</span>
+              <span class="chat-sub-text">{{ session.question_count }} 题</span>
+              <span v-if="hintUsed" class="chat-sub-text hint-used">· 已用提示</span>
             </span>
           </div>
-          <button class="btn btn-danger-ghost" :disabled="busy" @click="finishInterview">
+          <button class="btn btn-ghost finish-btn" :disabled="busy" @click="finishInterview">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
             结束面试
           </button>
         </header>
@@ -307,7 +322,15 @@ function sceneLabel(scene: string): string {
           </div>
 
           <div v-for="(m, i) in messages" :key="i" class="bubble-row" :class="m.role">
-            <div v-if="m.role === 'ai'" class="avatar ai-avatar">AI</div>
+            <div v-if="m.role === 'ai'" class="avatar ai-avatar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="10" rx="2"/>
+                <circle cx="12" cy="5" r="2"/>
+                <path d="M12 7v4"/>
+                <line x1="8" y1="16" x2="8" y2="16"/>
+                <line x1="16" y1="16" x2="16" y2="16"/>
+              </svg>
+            </div>
             <div class="bubble-col">
               <div class="bubble" :class="m.role">
                 <span v-if="m.streaming && m.content === ''" class="typing">正在思考…</span>
@@ -324,7 +347,7 @@ function sceneLabel(scene: string): string {
                   <span class="cite-arrow" :class="{ open: m.showCites }">▸</span>
                   引用来源（{{ m.citations.length }}）
                 </button>
-                <div v-if="m.showCites" class="cite-list">
+                <div v-if="m.showCites" class="cite-list card">
                   <div v-for="(c, ci) in m.citations" :key="ci" class="cite-item">
                     <span class="cite-badge">[{{ ci + 1 }}]</span>
                     <div class="cite-body">
@@ -344,41 +367,73 @@ function sceneLabel(scene: string): string {
           </div>
         </div>
 
-        <div class="chat-input-bar">
-          <button class="btn hint-btn" :disabled="!canHint" @click="requestHint">提示一下</button>
-          <button class="btn skip-btn" :disabled="!canSkip" @click="skipQuestion">跳过此题</button>
+        <!-- 集成式输入底栏 -->
+        <div class="chat-input-card">
           <textarea
             v-model="input"
             ref="inputEl"
-            class="input chat-input"
+            class="chat-input"
             rows="1"
             placeholder="输入你的回答…（Enter 发送，Shift+Enter 换行）"
             :disabled="!canAnswer"
             @keydown.enter="onInputKeydown"
             @input="autoGrow"
           ></textarea>
-          <button class="btn btn-primary" :disabled="!canAnswer" @click="sendAnswer">发送</button>
+          <div class="input-toolbar">
+            <div class="toolbar-left">
+              <button class="toolbar-btn" :disabled="!canHint" @click="requestHint">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                提示一下
+              </button>
+              <button class="toolbar-btn" :disabled="!canSkip" @click="skipQuestion">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                  <line x1="19" y1="5" x2="19" y2="19"/>
+                </svg>
+                跳过此题
+              </button>
+            </div>
+            <button class="send-btn" :disabled="!canAnswer" @click="sendAnswer">
+              <span>发送</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <aside class="chat-side">
         <div class="card side-card">
-          <h4 class="side-title">本轮评估要点</h4>
+          <div class="side-card-head">
+            <h4 class="side-title">本轮评估要点</h4>
+            <span v-if="hasAssess && assessData!.score != null" class="score-chip">
+              {{ assessData!.score }} 分
+            </span>
+          </div>
           <div v-if="hasAssess" class="assess-panel">
-            <div
-              v-for="(val, key) in assessData!.dimensions"
-              :key="key"
-              class="dim-row"
-              :class="val >= 6 ? 'good' : 'warn'"
-            >
-              <span class="dim-mark">{{ val >= 6 ? '✓' : '○' }}</span>
-              <span class="dim-name">{{ key }}</span>
-              <span class="dim-score">{{ val }} 分</span>
+            <div class="dim-list">
+              <div
+                v-for="(val, key) in assessData!.dimensions"
+                :key="key"
+                class="dim-row"
+                :class="val >= 6 ? 'good' : 'warn'"
+              >
+                <span class="dim-dot"></span>
+                <span class="dim-name">{{ key }}</span>
+                <span class="dim-score">{{ val }}</span>
+              </div>
             </div>
             <p v-if="Object.keys(assessData!.dimensions).length > 0" class="assess-comment">
               {{ assessData!.comment }}
             </p>
             <p v-else class="assess-fallback">{{ assessData!.comment || '本次未生成评估要点' }}</p>
+
             <div
               v-if="hasAssess && assessData!.citations && assessData!.citations.length"
               class="cite-block assess-cites"
@@ -387,7 +442,7 @@ function sceneLabel(scene: string): string {
                 <span class="cite-arrow" :class="{ open: showAssessCites }">▸</span>
                 引用来源（{{ assessData!.citations.length }}）
               </button>
-              <div v-if="showAssessCites" class="cite-list">
+              <div v-if="showAssessCites" class="cite-list cite-list-side">
                 <div v-for="(c, ci) in assessData!.citations" :key="ci" class="cite-item">
                   <span class="cite-badge">[{{ ci + 1 }}]</span>
                   <div class="cite-body">
@@ -397,6 +452,7 @@ function sceneLabel(scene: string): string {
                 </div>
               </div>
             </div>
+
             <div
               v-if="hasAssess && assessData!.verification"
               class="verify-box"
@@ -408,7 +464,7 @@ function sceneLabel(scene: string): string {
                     assessData!.verification.status === 'uncertain' ? '存疑' : '无法确认'
                   }}
                 </span>
-                <span v-if="assessData!.verification.skipped" class="verify-skip">（已跳过核验）</span>
+                <span v-if="assessData!.verification.skipped" class="verify-skip">（已跳过）</span>
               </div>
               <p v-if="assessData!.verification.reason" class="verify-reason">{{ assessData!.verification.reason }}</p>
               <ul
@@ -426,14 +482,23 @@ function sceneLabel(scene: string): string {
 
         <div class="card side-card">
           <h4 class="side-title">会话信息</h4>
-          <div class="info-row"><span>面试官</span><b>DeepSeek</b></div>
+          <div class="info-row"><span class="info-label">面试官</span><span class="info-value">DeepSeek</span></div>
           <div class="info-row">
-            <span>面试场景</span><b>{{ session ? sceneLabel(session.scene) : '—' }}</b>
+            <span class="info-label">面试场景</span>
+            <span class="info-value">{{ session ? sceneLabel(session.scene) : '—' }}</span>
           </div>
           <div class="info-row">
-            <span>知识库</span><b>{{ kbLabel }}</b>
+            <span class="info-label">面试类型</span>
+            <span class="info-value">{{ session ? interviewTypeLabel(session.interview_type) : '—' }}</span>
           </div>
-          <div class="info-row"><span>简历</span><b class="muted">未关联 · P2 启用</b></div>
+          <div class="info-row">
+            <span class="info-label">知识库</span>
+            <span class="info-value">{{ kbLabel }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">简历</span>
+            <span class="info-value">{{ resumeLabel }}</span>
+          </div>
         </div>
       </aside>
     </div>
@@ -449,16 +514,18 @@ function sceneLabel(scene: string): string {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  max-width: 1120px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 28px;
+  position: relative;
+  z-index: 1;
 }
 
 .chat-layout {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 24px;
+  gap: 28px;
 }
 
 .chat-main {
@@ -473,91 +540,125 @@ function sceneLabel(scene: string): string {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding-top: 16px;
+  gap: 14px;
+  padding-top: 20px;
   overflow-y: auto;
 }
 
 .side-card {
-  padding: 16px 18px;
+  padding: 18px 20px;
+}
+
+.side-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .side-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--text-3);
+  color: var(--soft-ink);
   margin: 0 0 12px;
+  letter-spacing: -0.01em;
+}
+
+.side-card-head .side-title {
+  margin: 0;
+}
+
+.score-chip {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--soft-accent);
+  background: var(--soft-accent-bg);
+  padding: 2px 10px;
+  border-radius: var(--r-full);
+}
+
+.dim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .dim-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: 10px;
+  padding: 7px 0;
   font-size: 13px;
 }
 
-.dim-mark {
-  width: 16px;
-  text-align: center;
-  font-weight: 700;
+.dim-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.dim-row.good .dim-mark {
-  color: #34c77b;
+.dim-row.good .dim-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px oklch(90% 0.08 145 / 0.5);
 }
 
-.dim-row.warn .dim-mark {
-  color: var(--warning);
+.dim-row.warn .dim-dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px oklch(90% 0.08 70 / 0.5);
 }
 
 .dim-name {
   flex: 1;
-  color: var(--text-1);
+  color: var(--soft-ink);
+  font-weight: 500;
 }
 
 .dim-score {
-  color: var(--text-2);
+  color: var(--soft-muted);
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12px;
 }
 
 .assess-comment {
-  font-size: 13px;
-  color: var(--text-2);
-  line-height: 1.6;
-  border-top: 1px dashed var(--border);
-  padding-top: 10px;
-  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--soft-muted);
+  line-height: 1.7;
+  border-top: 1px solid var(--soft-hairline);
+  padding-top: 12px;
+  margin: 10px 0 0;
 }
 
 .assess-fallback,
 .side-placeholder {
   font-size: 13px;
-  color: var(--text-3);
+  color: var(--soft-faint);
   margin: 0;
   line-height: 1.6;
+  font-style: italic;
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
-  font-size: 13px;
+  padding: 7px 0;
+  font-size: 12.5px;
 }
 
-.info-row span {
-  color: var(--text-3);
+.info-label {
+  color: var(--soft-faint);
 }
 
-.info-row b {
-  color: var(--text-1);
-  font-weight: 600;
-}
-
-.info-row .muted {
-  color: var(--text-3);
-  font-weight: 400;
+.info-value {
+  color: var(--soft-ink);
+  font-weight: 500;
+  text-align: right;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 960px) {
@@ -566,105 +667,111 @@ function sceneLabel(scene: string): string {
   }
 }
 
+/* ===== Header ===== */
 .chat-header {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 18px 0 12px;
+  border-bottom: 1px solid var(--soft-hairline);
 }
 
 .back-btn {
-  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  color: var(--soft-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.back-btn:hover {
+  background: var(--soft-accent-bg);
+  color: var(--soft-accent);
 }
 
 .chat-title {
   flex: 1;
+  min-width: 0;
 }
 
 .chat-heading {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
+  color: var(--soft-ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
 }
 
 .chat-sub {
-  font-size: 13px;
-  color: var(--text-2);
+  font-size: 12px;
+  color: var(--soft-muted);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.type-chip,
-.status-badge {
-  font-size: 12px;
-  font-weight: 500;
-  padding: 2px 10px;
-  border-radius: var(--r-full);
-}
-
-.type-chip {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.status-badge.ongoing {
-  background: #dcfce7;
-  color: #15803d;
+.chat-sub-text {
+  color: var(--soft-faint);
 }
 
 .hint-used {
   color: var(--warning);
+  font-weight: 500;
 }
 
-.btn-danger-ghost {
+.finish-btn {
+  color: var(--soft-faint);
+  border: 1px solid var(--soft-hairline);
+  background: var(--soft-surface);
+  backdrop-filter: blur(12px);
+}
+
+.finish-btn:hover {
   color: var(--danger);
-  border-color: rgba(229, 72, 77, 0.3);
+  border-color: oklch(55% 0.22 25 / 0.3);
+  background: var(--danger-bg);
 }
 
+/* ===== Progress ===== */
 .progress-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 0 0;
-}
-
-.progress-track {
-  flex: 1;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--border);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(135deg, var(--primary), #a78bfa);
-  transition: width 0.3s var(--ease-out);
+  padding: 12px 0 4px;
 }
 
 .progress-label {
   font-size: 12px;
-  color: var(--text-2);
+  color: var(--soft-muted);
   white-space: nowrap;
+  font-weight: 500;
 }
 
+/* ===== Chat Scroll ===== */
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 4px;
+  padding: 24px 8px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .chat-empty {
   text-align: center;
-  color: var(--text-3);
+  color: var(--soft-faint);
   padding: 60px 0;
 }
 
+/* ===== Bubbles ===== */
 .bubble-row {
   display: flex;
   gap: 10px;
@@ -676,211 +783,74 @@ function sceneLabel(scene: string): string {
 }
 
 .avatar {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--primary), #a78bfa);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.ai-avatar {
+  background: var(--soft-accent-grad);
+  color: #fff;
+  box-shadow: var(--soft-shadow-sm);
 }
 
 .user-avatar {
-  background: #475569;
-  font-size: 15px;
+  background: oklch(45% 0.02 280);
+  color: #fff;
+  font-size: 13px;
 }
 
 .bubble-col {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  max-width: calc(100% - 90px);
 }
 
 .bubble-row.user .bubble-col {
   align-items: flex-end;
 }
 
-.msg-meta {
-  font-size: 11px;
-  color: var(--text-3);
-  margin-top: 4px;
-  padding: 0 4px;
-  font-variant-numeric: tabular-nums;
-}
-
-.cite-block {
-  margin-top: 8px;
-  max-width: 520px;
-}
-
-.cite-toggle {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border: none;
-  border-radius: var(--r-full);
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.cite-arrow {
-  display: inline-block;
-  transition: transform 0.2s var(--ease-out);
-}
-
-.cite-arrow.open {
-  transform: rotate(90deg);
-}
-
-.cite-list {
-  margin-top: 8px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.cite-item {
-  display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.cite-item + .cite-item {
-  border-top: 1px dashed var(--border);
-}
-
-.cite-badge {
-  color: var(--primary);
-  font-weight: 700;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.cite-body {
-  min-width: 0;
-}
-
-.cite-file {
-  font-weight: 600;
-  color: var(--text-1);
-  font-size: 12px;
-  margin-bottom: 2px;
-}
-
-.cite-text {
-  color: var(--text-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.assess-cites {
-  margin-top: 8px;
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-}
-.assess-cites .cite-text {
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.verify-box {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #f8fafc;
-  font-size: 12px;
-}
-
-.verify-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.verify-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.verify-badge.verified {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.verify-badge.uncertain {
-  background: #fef9c3;
-  color: #854d0e;
-}
-
-.verify-badge.unconfirmed {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.verify-skip {
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-.verify-reason {
-  margin: 6px 0 0;
-  color: var(--text-2);
-  line-height: 1.6;
-}
-
-.verify-sources {
-  margin: 6px 0 0;
-  padding-left: 16px;
-}
-
-.verify-sources li {
-  margin: 2px 0;
-}
-
-.verify-sources a {
-  color: #6d28d9;
-}
-
 .bubble {
-  max-width: 72%;
+  max-width: 100%;
   padding: 12px 16px;
-  border-radius: 18px;
-  font-size: 15px;
-  line-height: 1.65;
+  border-radius: 16px;
+  font-size: 14.5px;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .bubble.ai {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-top-left-radius: 6px;
-  box-shadow: var(--shadow-sm);
+  background: var(--soft-bubble-ai);
+  border: 1px solid oklch(70% 0.2 280 / 0.15);
+  border-top-left-radius: 4px;
+  color: var(--soft-ink);
 }
 
 .bubble.user {
-  background: var(--primary);
+  background: var(--soft-bubble-user);
   color: #fff;
-  border-top-right-radius: 6px;
+  border-top-right-radius: 4px;
+  box-shadow: 0 4px 14px oklch(55% 0.2 275 / 0.3);
+}
+
+.msg-meta {
+  font-size: 11px;
+  color: var(--soft-faint);
+  margin-top: 5px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .typing {
-  color: var(--text-3);
+  color: var(--soft-faint);
   font-size: 14px;
 }
 
@@ -888,7 +858,7 @@ function sceneLabel(scene: string): string {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--primary);
+  color: var(--soft-accent);
   font-weight: 600;
 }
 
@@ -897,8 +867,8 @@ function sceneLabel(scene: string): string {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid rgba(124, 58, 237, 0.25);
-  border-top-color: var(--primary);
+  border: 2px solid oklch(70% 0.2 280 / 0.3);
+  border-top-color: var(--soft-accent);
   animation: spin 0.8s linear infinite;
 }
 
@@ -909,7 +879,7 @@ function sceneLabel(scene: string): string {
 }
 
 .typing-row {
-  padding-left: 44px;
+  padding-left: 46px;
 }
 
 .typing-dots {
@@ -921,7 +891,7 @@ function sceneLabel(scene: string): string {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--soft-accent);
   opacity: 0.4;
   animation: blink 1.2s infinite;
 }
@@ -945,46 +915,278 @@ function sceneLabel(scene: string): string {
   }
 }
 
-.chat-input-bar {
+/* ===== Citation ===== */
+.cite-block {
+  margin-top: 8px;
+  max-width: 520px;
+}
+
+.cite-toggle {
+  background: var(--soft-accent-bg);
+  color: var(--soft-accent);
+  border: none;
+  border-radius: var(--r-full);
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.cite-toggle:hover {
+  background: oklch(70% 0.2 280 / 0.25);
+}
+
+.cite-arrow {
+  display: inline-block;
+  transition: transform 0.2s var(--ease-out);
+  font-size: 10px;
+}
+
+.cite-arrow.open {
+  transform: rotate(90deg);
+}
+
+.cite-list {
+  margin-top: 8px;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 4px 8px;
+}
+
+.cite-item {
   display: flex;
-  align-items: flex-end;
   gap: 10px;
-  padding: 16px 0 20px;
+  padding: 10px 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  border-bottom: 1px solid var(--soft-hairline);
 }
 
-.hint-btn,
-.skip-btn {
-  white-space: nowrap;
-  font-size: 13px;
-  padding: 10px 14px;
-  margin-bottom: 4px;
+.cite-item:last-child {
+  border-bottom: none;
 }
 
-.skip-btn {
-  color: var(--text-2);
+.cite-badge {
+  color: var(--soft-accent);
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.cite-body {
+  min-width: 0;
+}
+
+.cite-file {
+  font-weight: 600;
+  color: var(--soft-ink);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.cite-text {
+  color: var(--soft-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.assess-cites {
+  margin-top: 10px;
+  border-top: 1px solid var(--soft-hairline);
+  padding-top: 10px;
+}
+
+.cite-list-side {
+  background: oklch(97% 0.012 280 / 0.5);
+}
+
+/* ===== Verify ===== */
+.verify-box {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: oklch(97% 0.012 280 / 0.6);
+  font-size: 12px;
+  border: 1px solid var(--soft-hairline);
+}
+
+.verify-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verify-badge {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: var(--r-full);
+  font-weight: 600;
+}
+
+.verify-badge.verified {
+  background: var(--success-bg);
+  color: oklch(48% 0.14 145);
+}
+
+.verify-badge.uncertain {
+  background: var(--warning-bg);
+  color: oklch(55% 0.16 70);
+}
+
+.verify-badge.unconfirmed {
+  background: oklch(94% 0.015 280);
+  color: var(--soft-faint);
+}
+
+.verify-skip {
+  font-size: 11px;
+  color: var(--soft-faint);
+}
+
+.verify-reason {
+  margin: 8px 0 0;
+  color: var(--soft-muted);
+  line-height: 1.6;
+}
+
+.verify-sources {
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
+
+.verify-sources li {
+  margin: 2px 0;
+}
+
+.verify-sources a {
+  color: var(--soft-accent);
+  font-size: 11.5px;
+}
+
+/* ===== 集成式输入底栏 ===== */
+.chat-input-card {
+  margin: 16px 0 24px;
+  background: var(--soft-surface);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid oklch(100% 0 0 / 0.5);
+  border-radius: var(--r-xl);
+  box-shadow: var(--soft-shadow-md);
+  overflow: hidden;
 }
 
 .chat-input {
-  flex: 1;
-  padding: 12px 16px;
+  width: 100%;
+  padding: 16px 20px 12px;
+  border: none;
+  background: transparent;
   resize: none;
-  line-height: 1.5;
-  max-height: 120px;
+  line-height: 1.6;
+  max-height: 160px;
   overflow-y: auto;
+  font-size: 14px;
+  color: var(--soft-ink);
+  outline: none;
+  font-family: inherit;
 }
 
+.chat-input::placeholder {
+  color: var(--soft-faint);
+}
+
+.chat-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 12px;
+  gap: 10px;
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 6px;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--soft-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: var(--soft-accent-bg);
+  color: var(--soft-accent);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--soft-accent-grad);
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--soft-shadow-accent);
+  transition: all var(--transition-fast);
+}
+
+.send-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px oklch(55% 0.2 275 / 0.45);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ===== Toast ===== */
 .toast {
   position: fixed;
-  top: 20px;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--text-1);
+  background: oklch(25% 0.03 280 / 0.9);
   color: #fff;
   padding: 10px 20px;
-  border-radius: var(--r-full);
-  font-size: 14px;
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  box-shadow: var(--soft-shadow-lg);
   z-index: 200;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .toast-enter-active,
@@ -998,5 +1200,20 @@ function sceneLabel(scene: string): string {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-8px);
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 640px) {
+  .chat-page {
+    padding: 0 12px;
+  }
+
+  .bubble-col {
+    max-width: calc(100% - 60px);
+  }
+
+  .bubble {
+    font-size: 14px;
+  }
 }
 </style>

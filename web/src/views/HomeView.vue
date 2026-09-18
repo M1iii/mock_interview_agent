@@ -8,9 +8,12 @@ const router = useRouter()
 
 type SessionFilter = 'all' | SessionStatus
 
+const PAGE_SIZE = 10
+
 const sessions = ref<SessionMeta[]>([])
 const loading = ref(true)
 const filter = ref<SessionFilter>('all')
+const currentPage = ref(1)
 
 const filters: { value: SessionFilter; label: string }[] = [
   { value: 'all', label: '全部' },
@@ -23,6 +26,38 @@ const filteredSessions = computed(() =>
     ? sessions.value
     : sessions.value.filter((s) => s.status === filter.value),
 )
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredSessions.value.length / PAGE_SIZE)))
+
+const pagedSessions = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return filteredSessions.value.slice(start, start + PAGE_SIZE)
+})
+
+// 切换筛选时回到第一页
+function setFilter(f: SessionFilter) {
+  filter.value = f
+  currentPage.value = 1
+}
+
+function goToPage(page: number) {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+}
+
+const pageNumbers = computed(() => {
+  const total = totalPages.value
+  if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1)
+  const cur = currentPage.value
+  const pages: (number | 'ellipsis')[] = [1]
+  if (cur > 3) pages.push('ellipsis')
+  const start = Math.max(2, cur - 1)
+  const end = Math.min(total - 1, cur + 1)
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (cur < total - 2) pages.push('ellipsis')
+  pages.push(total)
+  return pages
+})
 
 const showCreate = ref(false)
 const creating = ref(false)
@@ -45,10 +80,6 @@ async function load() {
   } finally {
     loading.value = false
   }
-}
-
-async function loadResumes() {
-  resumes.value = await listResumes()
 }
 
 onMounted(async () => {
@@ -116,6 +147,10 @@ function sceneLabel(scene: Scene): string {
   return scene === 'intern' ? '实习' : '全职'
 }
 
+function interviewTypeLabel(type?: string): string {
+  return { technical: '技术面', behavioral: '行为面', comprehensive: '综合面' }[type ?? 'technical'] ?? '技术面'
+}
+
 function statusLabel(status: SessionMeta['status']): string {
   return status === 'finished' ? '已完成' : '进行中'
 }
@@ -125,32 +160,52 @@ function progressText(s: SessionMeta): string {
   const cur = Math.min((s.question_index ?? 0) + 1, s.question_count)
   return `第 ${cur} / ${s.question_count} 题`
 }
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  if (isToday) {
+    return `今天 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) {
+    return `昨天 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
 </script>
 
 <template>
   <div class="page home">
     <header class="home-header">
-      <div class="home-title">
-        <div class="logo-badge">面</div>
-        <div>
-          <h1 class="page-title">AI 面试官</h1>
-          <p class="page-sub">模拟面试 · 实时评估 · 报告导出</p>
-        </div>
+      <div>
+        <h1 class="page-title">面试会话</h1>
+        <p class="page-sub">创建一场面试，开始你的模拟练习</p>
       </div>
-      <div class="header-actions">
-        <button class="btn" @click="router.push('/knowledge')">知识库</button>
-        <button class="btn" @click="router.push('/resumes')">简历</button>
-        <button class="btn" @click="router.push('/settings')">环境配置</button>
-        <button class="btn btn-primary" @click="openCreate">新建面试</button>
-      </div>
+      <button class="btn btn-primary" @click="openCreate">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        新建面试
+      </button>
     </header>
 
     <div v-if="loading" class="state-hint">加载会话中…</div>
 
-    <div v-else-if="sessions.length === 0" class="state-hint empty-card card">
-      <p class="empty-title">还没有面试会话</p>
-      <p class="empty-sub">创建一场面试，开始练习吧</p>
-      <button class="btn btn-primary" @click="openCreate">开始第一次面试</button>
+    <div v-else-if="sessions.length === 0" class="empty-wrap">
+      <div class="card empty-card">
+        <div class="empty-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <p class="empty-title">还没有面试会话</p>
+        <p class="empty-sub">创建一场面试，开始练习吧</p>
+        <button class="btn btn-primary" @click="openCreate">开始第一次面试</button>
+      </div>
     </div>
 
     <div v-else>
@@ -160,7 +215,7 @@ function progressText(s: SessionMeta): string {
           :key="f.value"
           class="filter-chip"
           :class="{ active: filter === f.value }"
-          @click="filter = f.value"
+          @click="setFilter(f.value)"
         >
           {{ f.label }}
         </button>
@@ -168,31 +223,68 @@ function progressText(s: SessionMeta): string {
 
       <div v-if="filteredSessions.length === 0" class="state-hint">该分类下暂无会话</div>
 
-      <div v-else class="session-grid">
+      <div v-else class="session-list">
         <div
-          v-for="s in filteredSessions"
+          v-for="s in pagedSessions"
           :key="s.id"
           class="card session-card"
           @click="openSession(s)"
         >
-          <div class="session-top">
-            <span class="scene-tag" :class="s.scene">{{ sceneLabel(s.scene) }}</span>
-            <span class="status-tag" :class="s.status">{{ statusLabel(s.status) }}</span>
-            <button class="btn-ghost delete-btn" title="删除会话" @click="handleDelete($event, s.id)">
+          <div class="sc-main">
+            <div class="sc-title">
+              {{ s.title }}
+              <span class="badge" :class="s.status === 'finished' ? 'badge-success' : 'badge-warning'">
+                {{ statusLabel(s.status) }}
+              </span>
+              <span class="chip">{{ sceneLabel(s.scene) }} · {{ interviewTypeLabel(s.interview_type) }}</span>
+            </div>
+            <div class="sc-meta">
+              <span>{{ formatDate(s.created_at) }}</span>
+              <span>{{ s.message_count ?? 0 }} 条消息</span>
+              <span>{{ progressText(s) }}</span>
+            </div>
+          </div>
+          <div class="sc-actions">
+            <button class="btn btn-ghost delete-btn" title="删除会话" @click.stop="handleDelete($event, s.id)">
               删除
             </button>
-          </div>
-          <h3 class="session-title">{{ s.title }}</h3>
-          <div class="session-meta">
-            <span>{{ s.message_count ?? 0 }} 条消息</span>
-            <span>{{ progressText(s) }}</span>
-            <span>{{ new Date(s.created_at).toLocaleString('zh-CN') }}</span>
-          </div>
-          <div class="session-action">
-            <button class="btn session-btn" @click.stop="openSession(s)">
+            <button class="btn btn-sm btn-primary" @click.stop="openSession(s)">
               {{ s.status === 'finished' ? '查看报告' : '继续面试' }}
             </button>
           </div>
+        </div>
+
+        <div v-if="totalPages > 1" class="pagination">
+          <button
+            class="page-btn"
+            :disabled="currentPage === 1"
+            @click="goToPage(currentPage - 1)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <template v-for="(p, idx) in pageNumbers" :key="idx">
+            <span v-if="p === 'ellipsis'" class="page-ellipsis">…</span>
+            <button
+              v-else
+              class="page-btn"
+              :class="{ active: currentPage === p }"
+              @click="goToPage(p)"
+            >
+              {{ p }}
+            </button>
+          </template>
+          <button
+            class="page-btn"
+            :disabled="currentPage === totalPages"
+            @click="goToPage(currentPage + 1)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+          <span class="page-info">共 {{ filteredSessions.length }} 条</span>
         </div>
       </div>
     </div>
@@ -206,16 +298,16 @@ function progressText(s: SessionMeta): string {
           <div class="scene-toggle">
             <button
               type="button"
-              class="btn"
-              :class="{ 'btn-primary': form.scene === 'intern' }"
+              class="scene-chip"
+              :class="{ active: form.scene === 'intern' }"
               @click="form.scene = 'intern'"
             >
               实习
             </button>
             <button
               type="button"
-              class="btn"
-              :class="{ 'btn-primary': form.scene === 'fulltime' }"
+              class="scene-chip"
+              :class="{ active: form.scene === 'fulltime' }"
               @click="form.scene = 'fulltime'"
             >
               全职
@@ -239,6 +331,16 @@ function progressText(s: SessionMeta): string {
         </div>
 
         <div class="field">
+          <span class="label">面试类型</span>
+          <select v-model="form.interview_type" class="input">
+            <option value="technical">技术面</option>
+            <option value="behavioral">行为面</option>
+            <option value="comprehensive">综合面</option>
+          </select>
+          <p class="field-hint">技术面偏原理与系统设计，行为面偏经历与软技能，综合面两者兼有</p>
+        </div>
+
+        <div class="field">
           <label class="label" for="kb-select">关联知识库（可选）</label>
           <select id="kb-select" v-model="form.kb_id" class="input">
             <option value="">不关联（通用出题）</option>
@@ -247,16 +349,6 @@ function progressText(s: SessionMeta): string {
             </option>
           </select>
           <p class="field-hint">关联后出题将基于知识库内容，并标注引用来源</p>
-        </div>
-
-        <div class="field">
-          <span class="label">面试类型</span>
-          <select v-model="form.interview_type" class="input">
-            <option value="technical">技术面</option>
-            <option value="behavioral">行为面</option>
-            <option value="comprehensive">综合面</option>
-          </select>
-          <p class="field-hint">技术面偏原理与系统设计，行为面偏经历与软技能，综合面两者兼有</p>
         </div>
 
         <div class="field">
@@ -285,7 +377,7 @@ function progressText(s: SessionMeta): string {
         <p v-if="createError" class="error">{{ createError }}</p>
 
         <div class="modal-actions">
-          <button class="btn" :disabled="creating" @click="showCreate = false">取消</button>
+          <button class="btn btn-ghost" :disabled="creating" @click="showCreate = false">取消</button>
           <button class="btn btn-primary" :disabled="creating" @click="handleCreate">
             {{ creating ? '创建中…' : '开始面试' }}
           </button>
@@ -298,201 +390,150 @@ function progressText(s: SessionMeta): string {
 <style scoped>
 .home-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 28px;
+  gap: 16px;
 }
 
-.home-title {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+.home-header .page-title {
+  margin-bottom: 2px;
 }
 
-.logo-badge {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--primary), #a78bfa);
-  color: #fff;
-  font-size: 22px;
-  font-weight: 700;
+.home-header .page-sub {
+  margin-bottom: 0;
+}
+
+.empty-wrap {
   display: flex;
-  align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-md);
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.state-hint {
-  text-align: center;
-  color: var(--text-2);
-  padding: 40px 0;
+  padding: 60px 0;
 }
 
 .empty-card {
-  padding: 48px 24px;
+  padding: 48px 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  text-align: center;
+  max-width: 420px;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--soft-accent-bg);
+  color: var(--soft-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
 }
 
 .empty-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--soft-ink);
 }
 
 .empty-sub {
-  font-size: 14px;
-  color: var(--text-2);
-  margin-bottom: 12px;
+  font-size: 13.5px;
+  color: var(--soft-muted);
+  margin-bottom: 8px;
+  line-height: 1.6;
 }
 
 .filter-row {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 .filter-chip {
-  font-size: 13px;
-  padding: 6px 18px;
+  font-size: 12.5px;
+  padding: 6px 16px;
   border-radius: var(--r-full);
-  border: 1px solid var(--border);
+  border: 1px solid var(--soft-hairline);
   background: transparent;
-  color: var(--text-2);
+  color: var(--soft-muted);
   cursor: pointer;
-  transition:
-    background 0.2s var(--ease-out),
-    color 0.2s var(--ease-out),
-    border-color 0.2s var(--ease-out);
+  transition: all var(--transition-fast);
+  font-weight: 500;
 }
 
 .filter-chip:hover {
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: var(--soft-accent);
+  color: var(--soft-accent);
 }
 
 .filter-chip.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  color: var(--soft-accent);
+  background: var(--soft-accent-bg);
+  border-color: transparent;
+  font-weight: 600;
 }
 
-.session-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .session-card {
-  padding: 20px;
+  padding: 16px 20px;
   cursor: pointer;
-  transition:
-    transform 0.2s var(--ease-out),
-    box-shadow 0.2s var(--ease-out);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .session-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  box-shadow: var(--soft-shadow-md);
+  border-color: oklch(100% 0 0 / 0.8);
 }
 
-.session-top {
+.sc-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sc-title {
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--soft-ink);
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
-.scene-tag,
-.status-tag {
-  font-size: 12px;
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: var(--r-full);
+.sc-meta {
+  font-size: 12.5px;
+  color: var(--soft-muted);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
-.scene-tag.intern {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.scene-tag.fulltime {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.status-tag.ongoing {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.status-tag.finished {
-  background: #e2e8f0;
-  color: #475569;
+.sc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .delete-btn {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--text-3);
+  font-size: 12.5px;
+  color: var(--soft-faint);
+  padding: 5px 10px;
 }
 
 .delete-btn:hover {
   color: var(--danger);
-}
-
-.session-title {
-  font-size: 17px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.session-meta {
-  display: flex;
-  gap: 14px;
-  font-size: 13px;
-  color: var(--text-3);
-  margin-bottom: 14px;
-}
-
-.session-action {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.session-btn {
-  font-size: 13px;
-  padding: 7px 16px;
-}
-
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(42, 36, 56, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal {
-  width: 400px;
-  max-width: calc(100vw - 48px);
-  padding: 28px;
-}
-
-.modal-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 20px;
 }
 
 .field {
@@ -504,41 +545,106 @@ function progressText(s: SessionMeta): string {
   gap: 10px;
 }
 
-.scene-toggle .btn {
+.scene-chip {
   flex: 1;
+  text-align: center;
+  padding: 9px 14px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--soft-hairline);
+  background: var(--soft-surface-strong);
+  color: var(--soft-ink);
+}
+
+.scene-chip:hover {
+  border-color: var(--soft-hairline-strong);
+}
+
+.scene-chip.active {
+  background: var(--soft-accent-grad);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: var(--soft-shadow-sm);
 }
 
 .field-hint {
   margin-top: 8px;
   font-size: 12px;
-  color: var(--text-3);
+  color: var(--soft-faint);
+  line-height: 1.5;
 }
 
 .switch-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  color: var(--text-1);
+  font-size: 13px;
+  color: var(--soft-ink);
   cursor: pointer;
 }
 
 .switch-row input {
   width: 16px;
   height: 16px;
-  accent-color: var(--primary);
+  accent-color: var(--soft-accent);
 }
 
-.error {
-  color: var(--danger);
-  font-size: 13px;
-  margin: 12px 0;
-}
-
-.modal-actions {
+.pagination {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 24px;
+}
+
+.page-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--soft-hairline);
+  background: var(--soft-surface-strong);
+  color: var(--soft-ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: var(--soft-accent);
+  color: var(--soft-accent);
+}
+
+.page-btn.active {
+  background: var(--soft-accent-grad);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: var(--soft-shadow-sm);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-ellipsis {
+  color: var(--soft-faint);
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.page-info {
+  margin-left: 12px;
+  font-size: 12.5px;
+  color: var(--soft-muted);
 }
 </style>
