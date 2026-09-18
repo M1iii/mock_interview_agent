@@ -13,6 +13,7 @@ _DEFAULTS = {
         "host": "127.0.0.1",
         "port": 8000,
         "title": "AI 面试官",
+        "max_sessions": 30,
     },
     "llm": {
         "api_key": "",

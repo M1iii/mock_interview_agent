@@ -77,10 +77,19 @@ def _to_response(meta: SessionMeta) -> SessionResponse:
 @router.post("", response_model=SessionResponse)
 async def create_session(
     req: CreateSessionRequest,
+    request: Request,
     store: InMemorySessionStore = Depends(get_session_store),
     key_store: KeyStore = Depends(get_key_store),
 ) -> SessionResponse:
     """新建会话：校验全局 Key → 快照绑定 → 创建元数据。"""
+    max_sessions = int(getattr(request.app.state.config.app, "max_sessions", 30))
+    current_count = len(store.list())
+    if current_count >= max_sessions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"会话数量已达上限（{max_sessions} 条），请先删除旧会话后再创建",
+        )
+
     session_id = str(uuid.uuid4())
     try:
         key_store.snapshot_from_global(session_id)

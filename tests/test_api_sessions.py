@@ -294,3 +294,31 @@ async def test_list_sessions_progress_fields():
             sess = next(s for s in data if s["id"] == sid)
             assert sess["message_count"] == 4
             assert sess["question_index"] == 1
+
+
+async def test_create_session_max_limit(tmp_path):
+    """会话数量达上限后创建新会话返回 400。"""
+    async with app.router.lifespan_context(app):
+        app.state.session_store = SqliteSessionStore(tmp_path / "interview.db")
+        # 设置上限为 2
+        from omegaconf import OmegaConf
+
+        original_config = app.state.config
+        app.state.config = OmegaConf.merge(original_config, {"app": {"max_sessions": 2}})
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await _set_key(client)
+            # 前 2 条成功
+            r1 = await client.post("/api/sessions", json={"scene": "intern", "question_count": 5})
+            assert r1.status_code == 200
+            r2 = await client.post(
+                "/api/sessions", json={"scene": "fulltime", "question_count": 10}
+            )
+            assert r2.status_code == 200
+            # 第 3 条失败
+            r3 = await client.post("/api/sessions", json={"scene": "intern", "question_count": 5})
+            assert r3.status_code == 400
+            assert "上限" in r3.json()["detail"]
+            assert "2 条" in r3.json()["detail"]
+        # 恢复
+        app.state.config = original_config

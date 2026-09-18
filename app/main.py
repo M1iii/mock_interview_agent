@@ -16,12 +16,12 @@ from app.config import PROJECT_ROOT, load_config
 from app.interview.graph import compile_graph
 from app.llm.client import DeepSeekClient
 from app.llm.keys import KeyStore
-from app.logging import setup_logging
+from app.logging import logger, setup_logging
 from app.retrieval.embedding import OpenAICompatEmbedding
 from app.retrieval.es import ESManager
 from app.retrieval.qdrant import QdrantManager
 from app.retrieval.retrieve import RetrievalContext
-from app.store.checkpointer import create_checkpointer
+from app.store.checkpointer import create_checkpointer, scrub_history_db
 from app.store.knowledge import KnowledgeStore
 from app.store.resume import ResumeStore
 from app.store.sessions import SqliteSessionStore
@@ -36,6 +36,18 @@ async def lifespan(app: FastAPI):
     setup_logging(cfg)
 
     app.state.config = cfg
+    # 启动自愈：清除修复前旧版写入的明文 API Key（幂等）。在任何存储连接建立前执行，
+    # 避免并发写锁；失败仅告警，不阻断启动。
+    try:
+        scrub_stats = scrub_history_db(PROJECT_ROOT / cfg.interview.db)
+        if any(scrub_stats.values()):
+            logger.info(
+                "history scrub done: deleted_writes={dw} rewritten_checkpoints={rc}",
+                dw=scrub_stats["deleted_writes"],
+                rc=scrub_stats["rewritten_checkpoints"],
+            )
+    except Exception as e:  # noqa: BLE001 - 自愈失败不阻断启动
+        logger.warning("history scrub skipped: {err}", err=repr(e))
     app.state.llm_client = DeepSeekClient(cfg)
     app.state.key_store = KeyStore()
     if cfg.llm.api_key:

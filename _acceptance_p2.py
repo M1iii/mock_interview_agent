@@ -49,6 +49,7 @@ SUMMARY 分别打印三类计数，避免「依赖未满足」与「应用缺陷
 """
 
 import argparse
+import contextlib
 import gc
 import json
 import sys
@@ -63,6 +64,7 @@ from omegaconf import OmegaConf
 
 from app.config import PROJECT_ROOT, load_config
 from app.interview.ratio import resume_question_indices
+from app.llm.client import DeepSeekClient
 from app.main import app
 from app.store.resume import FAILED, READY, ResumeStore
 
@@ -74,7 +76,30 @@ STD_READY_RATE = 0.90  # 20 份解析成功率 ≥90%（ready ≥18/20）
 STD_FIELD_HIT = 0.85  # ready 简历 profile_json 关键字段命中率 ≥85%
 STD_POINT_COUNT = 10  # ready 简历考点清单 ≥10 项
 STD_KEYWORD_HIT = 0.80  # 简历来源题干含 gold 考点关键词 ≥80%
+STD_REAL_RELEVANCE = 0.70  # limitation-1 门禁项：真实 LLM 出题与考点清单相关性 ≥70%
 RATIO_PLAN = {0.3: [1, 4, 7], 0.8: [1, 2, 3, 4, 6, 7, 8, 9], 0.5: [1, 3, 5, 7, 9]}
+
+# limitation-1 裁判 prompt：1 对 K 整体判定「题目 ↔ 简历考点清单」相关性，只输出严格 JSON
+JUDGE_RELATED = """\
+你是面试出题质检裁判。以下是基于某候选人简历生成的一道面试题，以及从该简历提取的 K 个考点。
+
+【简历考点清单】
+{points_block}
+
+【待判定面试题】
+{question}
+
+判定规则：
+1. 只看题目与考点清单的契合度（题目是否考察该简历涉及的某个/某几个考点方向），
+   不要要求题干逐字出现考点关键词，也不要用关键词子串匹配得出判定。
+2. 只要题目可被判定为「与至少一个考点相关」（能考察该考点对应的能力/经历/技术方向），
+   即判 related=true。
+3. 仅当题目考察方向与考点清单完全无关（属与该简历无关的通用题）时才判 related=false。
+
+只输出严格 JSON，不要输出任何其他文字、解释或代码块标记：
+{{"related": true}}
+或
+{{"related": false}}"""
 
 # P2-5 占位搜索 Key（仅验收用；结束还原为空）
 P2_VERIFY_KEY = "bocha-acceptance"
@@ -573,6 +598,126 @@ def p2_2(client: TestClient, cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
+# limitation-1：真实 LLM 出题 + 真实 LLM 裁判相关性判定（1 对 K 整体，严格 JSON）
+# ---------------------------------------------------------------------------
+
+
+def _parse_strict_related(raw: str) -> bool | None:
+    """解析裁判严格 JSON 输出，返回 related 布尔；非严格格式返回 None。
+
+    仅容忍外层代码围栏包裹（deepseek 偶发），其余一律视作非严格 JSON：
+    裁判凡输出「非严格格式」即按判定失败计数，如实暴露格式不符合要求的问题。
+    """
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`").strip()
+        if text.startswith("json"):
+            text = text[4:].strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    v = data.get("related")
+    return v if isinstance(v, bool) else None
+
+
+def _judge_question_related(
+    llm, api_key: str, question: str, gold_points: list[str]
+) -> tuple[bool, bool | None, str]:
+    """调真实 LLM 裁判判定「题目 ↔ 考点清单」整体相关性，返回 (judge_ok, verdict, raw)。"""
+    points_block = "\n".join(f"[{i}] {p}" for i, p in enumerate(gold_points, 1))
+    prompt = JUDGE_RELATED.format(points_block=points_block, question=question)
+    try:
+        raw, _ = llm.complete_sync(api_key=api_key, prompt=prompt)
+    except Exception as e:  # noqa: BLE001 - 单次裁判异常不中断
+        return False, None, f"judge-call-error｜{repr(e)[:60]}"
+    verdict = _parse_strict_related(raw)
+    return verdict is not None, verdict, raw.strip()
+
+
+def p2_2_real_relevance(client: TestClient, cfg) -> None:
+    """limitation-1 门禁项：真实 LLM 出题 + 真实 LLM 裁判相关性判定（≥70%）。
+
+    修正 p2_2-3 的口径局限（该分项用 fake LLM 回显考点块，只证明「注入链路一致性」，
+    属原样回显，并非真实「题目与考点相关性」）。本项改由真实 LLM 基于简历考点出题，
+    再另起真实 LLM 裁判做 1 对 K 整体判定（题目 ↔ 该简历考点清单，只输出严格 JSON）。
+    优先抽样 5 份真实简历（real_01~05，真实语料可外推），缺失时回退前 5 份 ready。
+    依赖：需先跑 p2-1 上传语料 + cfg.llm.api_key 为真实 Key（缺任一 → dep，不计入 failed）。
+    """
+    store = ResumeStore(PROJECT_ROOT / cfg.resume.db)
+    ready, scope = _scoped_ready(store)
+    api_key = str(getattr(cfg.llm, "api_key", "") or "")
+    if not ready:
+        _add_dep(
+            "P2-2 真实 LLM 出题-裁判相关性（≥70%）",
+            "无可用 ready 简历（需先跑 p2-1；非应用缺陷）",
+        )
+        return
+    if not api_key:
+        _add_dep(
+            "P2-2 真实 LLM 出题-裁判相关性（≥70%）",
+            "cfg.llm.api_key 为空（需真实 LLM Key；非应用缺陷）",
+        )
+        return
+
+    real_order = [f"real_{i:02d}" for i in range(1, 6)]
+    by_stem = {Path(r.file_name).stem: r for r in ready}
+    samples = [by_stem[k] for k in real_order if k in by_stem]
+    sample_src = "real-corpus" if samples else "fallback-first-ready"
+    if not samples:
+        samples = ready[:5]
+
+    llm = DeepSeekClient(cfg)
+    from app.interview.nodes import ask_question_node
+    from app.interview.state import initial_state
+
+    total = related = 0
+    per_resume: list[str] = []
+    for rec in samples:
+        stem = Path(rec.file_name).stem
+        gold_points = GOLD.get(stem, {}).get("points", [])
+        if not gold_points:
+            per_resume.append(f"{stem}:no-gold")
+            continue
+        try:  # question_index=0 → 1-based 1，技术面配比 [1,4,7] 首题即简历题（ratio 0.3）
+            state = initial_state(
+                scene="fulltime", question_count=10, resume_id=rec.id, interview_type="technical"
+            )
+            state["_api_key"] = api_key
+            out = ask_question_node(state, llm, resume_store=store, cfg=cfg)
+            question = (out.get("current_question") or "").strip()
+        except Exception as e:  # noqa: BLE001 - 单份出题异常不中断
+            per_resume.append(f"{stem}:ask-error {repr(e)[:80]}")
+            continue
+        if not question:
+            per_resume.append(f"{stem}:empty-question")
+            continue
+        total += 1
+        judge_ok, verdict, raw = _judge_question_related(llm, api_key, question, gold_points)
+        if not judge_ok:
+            per_resume.append(f"{stem}:judge-format-fail({raw[:40]})")
+        elif verdict is True:
+            related += 1
+            per_resume.append(f"{stem}:related")
+        else:
+            per_resume.append(f"{stem}:UNRELATED")
+
+    rate = related / total if total else 0.0
+    detail = (
+        f"口径=真实LLM出题+真实LLM裁判(1对K整体,严格JSON) scope={scope} sample={sample_src} "
+        f"相关={related}/{total} = {rate:.0%}（标准 ≥{STD_REAL_RELEVANCE:.0%}）| "
+        f"{'; '.join(per_resume)}"
+    )
+    report.add(
+        "P2-2 真实 LLM 出题-裁判相关性（≥70%）",
+        rate >= STD_REAL_RELEVANCE,
+        detail,
+    )
+
+
+# ---------------------------------------------------------------------------
 # P2-3 跨重启（进程内模拟）：SqliteSaver + SqliteSessionStore 同库重建
 # ---------------------------------------------------------------------------
 
@@ -945,6 +1090,400 @@ def p2_5(client: TestClient, cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 修复轮门禁：P2-9 落盘无明文 / P2-3 真实 uvicorn 重启续答 / P2-4 博查真实出网
+# ---------------------------------------------------------------------------
+
+
+def p2_9(cfg) -> None:
+    """P2-9 落盘无明文门禁（修复轮，离线、无需 LLM）。
+
+    a) 写入路径：SanitizingSqliteSaver 经真实编译图写入含 `_api_key` 的状态后，
+       磁盘（checkpoints blob / metadata / writes）对哨兵 Key 与 `_api_key`
+       通道名零残留；
+    b) 自愈路径：手工构造「修复前」脏数据（checkpoint blob 与 metadata 含
+       `_api_key`、writes 含 `channel='_api_key'`），跑 `scrub_history_db` 后
+       同样零明文残留，且确实删除 / 重写了行。
+    """
+    import sqlite3
+
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    from app.store.checkpointer import create_checkpointer, scrub_history_db
+
+    db = PROJECT_ROOT / "data" / "_acceptance_no_plaintext.db"
+    db.unlink(missing_ok=True)
+    sentinel = "sk-acceptance-plaintext-probe-0123456789"
+    sid = f"p2-9-{uuid.uuid4().hex[:8]}"
+
+    def _hits(conn: sqlite3.Connection) -> dict[str, int]:
+        qc = (
+            "SELECT count(*) FROM checkpoints "
+            "WHERE instr(CAST(checkpoint AS BLOB), CAST(? AS BLOB))>0"
+        )
+        return {
+            "checkpoint_sentinel": conn.execute(qc, (sentinel,)).fetchone()[0],
+            "checkpoint_channel": conn.execute(
+                "SELECT count(*) FROM checkpoints "
+                "WHERE instr(CAST(checkpoint AS BLOB), CAST('_api_key' AS BLOB))>0"
+            ).fetchone()[0],
+            "metadata_channel": conn.execute(
+                "SELECT count(*) FROM checkpoints WHERE instr(CAST(metadata AS TEXT),'_api_key')>0"
+            ).fetchone()[0],
+            "writes_channel": conn.execute(
+                "SELECT count(*) FROM writes WHERE channel='_api_key'"
+            ).fetchone()[0],
+            "writes_value": conn.execute(
+                'SELECT count(*) FROM writes WHERE instr(CAST("value" AS BLOB), CAST(? AS BLOB))>0',
+                (sentinel,),
+            ).fetchone()[0],
+        }
+
+    # --- a) 写入路径 ---
+    ck = create_checkpointer(OmegaConf.create({"interview": {"db": str(db)}}))
+    c = _compile_noop(ck)
+    c.invoke(
+        {
+            "messages": [HumanMessage(content="p2-9 no-plaintext")],
+            "_api_key": sentinel,
+            "scene": "fulltime",
+            "question_count": 5,
+            "question_index": 0,
+            "current_question": "",
+            "status": "ongoing",
+            "resume_id": "r1",
+            "interview_type": "technical",
+        },
+        {"configurable": {"thread_id": sid}},
+    )
+    conn = sqlite3.connect(str(db))
+    hits = _hits(conn)
+    write_ok = all(v == 0 for v in hits.values())
+    report.add(
+        "P2-9a 写入路径无明文（SanitizingSqliteSaver）",
+        write_ok,
+        f"sentinel={sentinel[:10]}… {hits}",
+    )
+    # 释放 checkpointer 持有连接，避免 Windows 下后续写/删临时库被占用
+    with contextlib.suppress(Exception):
+        ck.conn.close()
+
+    # --- b) 自愈路径：注入「修复前」脏数据再 scrub ---
+    raw = JsonPlusSerializer()
+    raw_ckpt = {
+        "v": 1,
+        "ts": "t",
+        "id": "dirty-c1",
+        "channel_values": {"messages": [], "_api_key": sentinel, "qidx": 3},
+        "channel_versions": {},
+        "versions_seen": {},
+        "pending_sends": [],
+        "updated_channels": ["_api_key", "qidx", "messages"],
+    }
+    typ, blob = raw.dumps_typed(raw_ckpt)
+    meta = json.dumps(
+        {
+            "source": "loop",
+            "step": 4,
+            "writes": {},
+            "parents": {},
+            "updated_channels": ["_api_key", "qidx"],
+        }
+    ).encode("utf-8")
+    dirty_xid = "dirty-thread"
+    conn.execute(
+        "INSERT INTO checkpoints"
+        "(thread_id,checkpoint_ns,checkpoint_id,parent_checkpoint_id,type,checkpoint,metadata)"
+        " VALUES(?,?,?,?,?,?,?)",
+        (dirty_xid, "", "dirty-c1", "", typ, sqlite3.Binary(blob), sqlite3.Binary(meta)),
+    )
+    conn.execute(
+        "INSERT INTO writes"
+        "(thread_id,checkpoint_ns,checkpoint_id,task_id,idx,channel,type,value)"
+        " VALUES(?,?,?,?,?,?,?,?)",
+        (
+            dirty_xid,
+            "",
+            "dirty-c1",
+            "task1",
+            0,
+            "_api_key",
+            "json",
+            sqlite3.Binary(sentinel.encode("utf-8")),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    stats = scrub_history_db(db)
+    conn = sqlite3.connect(str(db))
+    hits2 = _hits(conn)
+    conn.close()
+    db.unlink(missing_ok=True)
+    heal_ok = (
+        all(v == 0 for v in hits2.values())
+        and stats["deleted_writes"] >= 1
+        and stats["rewritten_checkpoints"] >= 1
+    )
+    report.add(
+        "P2-9b 历史库自愈（scrub 清残留明文）",
+        heal_ok,
+        f"{hits2} scrub={stats}",
+    )
+
+
+def p2_3r(cfg) -> None:
+    """P2-3 修复：真实 uvicorn 进程重启 + 真实 LLM 续答门禁。
+
+    修复前的 p2-3 仅在进程内「同库重建」模拟重启。本项起**真实 uvicorn 子进程**：
+    独立 PORT + INTERVIEW_DB=临时库，真实 LLM 出首题 → SIGTERM 杀进程 →
+    同库同端口重启第二进程 → 同会话续答出次题 → 断言会话历史/状态跨真实进程
+    重启完整恢复（messages 含首题与回答）。检索/博查不涉及（VERIFY/RETRIEVAL 关）。
+    未配置真实 LLM Key 时 dep 跳过。
+    """
+    import os
+    import socket
+    import sqlite3
+    import subprocess
+    import sys as _sys
+    import time as _time
+
+    import requests
+
+    api_key = str(getattr(cfg.llm, "api_key", "") or "")
+    if not api_key:
+        _add_dep(
+            "P2-3 真实 uvicorn 进程重启续答",
+            "cfg.llm.api_key 为空（需真实 LLM Key；非应用缺陷）",
+        )
+        return
+
+    db = PROJECT_ROOT / "data" / "_acceptance_p2_3r.db"
+    db.unlink(missing_ok=True)
+
+    def _free_port() -> int:
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        return port
+
+    port = _free_port()
+    env = dict(os.environ)
+    env.update(
+        {
+            "PORT": str(port),
+            "INTERVIEW_DB": str(db),
+            "LLM_API_KEY": api_key,
+            "VERIFY_ENABLED": "false",
+            "RETRIEVAL_ENABLED": "false",
+        }
+    )
+    base = f"http://127.0.0.1:{port}"
+    procs: list[subprocess.Popen] = []
+
+    def _start() -> subprocess.Popen:
+        p = subprocess.Popen(
+            [
+                _sys.executable,
+                "-m",
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--log-level",
+                "warning",
+            ],
+            cwd=str(PROJECT_ROOT),
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        procs.append(p)
+        return p
+
+    def _healthy(timeout: float = 45.0) -> bool:
+        deadline = _time.time() + timeout
+        while _time.time() < deadline:
+            if procs[-1].poll() is not None:
+                return False
+            try:
+                if requests.get(f"{base}/health", timeout=2).status_code == 200:
+                    return True
+            except requests.RequestException:
+                pass
+            _time.sleep(0.3)
+        return False
+
+    def _stop(p: subprocess.Popen) -> None:
+        try:
+            p.terminate()
+            p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait(timeout=5)
+        if p in procs:
+            procs.remove(p)
+        # Windows：进程退出后 sqlite 文件句柄可能短暂未释放，沉降后再访问
+        _time.sleep(1.0)
+
+    def _open_db():
+        conn = None
+        last_exc: Exception | None = None
+        for _ in range(5):
+            try:
+                conn = sqlite3.connect(str(db))
+                conn.execute("SELECT 1 FROM sessions").fetchone()
+                return conn
+            except Exception as e:  # noqa: BLE001 - 文件占用重试
+                last_exc = e
+                with contextlib.suppress(Exception):
+                    conn.close()
+                conn = None
+                _time.sleep(0.8)
+        raise last_exc or RuntimeError("open db failed")
+
+    def _chat_sse(session_id: str, payload: dict) -> str:
+        r = requests.post(f"{base}/api/chat/{session_id}", json=payload, stream=True, timeout=120)
+        tokens: list[str] = []
+        for line in r.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            try:
+                obj = json.loads(line[5:].strip())
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict) and obj.get("content"):
+                tokens.append(str(obj["content"]))
+        return "".join(tokens)
+
+    try:
+        _start()
+        if not _healthy():
+            report.add(
+                "P2-3 真实 uvicorn 进程重启续答",
+                False,
+                "首进程 /health 未就绪（子进程提前退出）",
+            )
+            return
+
+        r = requests.post(
+            f"{base}/api/sessions",
+            json={
+                "scene": "fulltime",
+                "question_count": 5,
+                "skip_opening": True,
+                "interview_type": "technical",
+            },
+            timeout=15,
+        )
+        if r.status_code != 200:
+            report.add(
+                "P2-3 真实 uvicorn 进程重启续答",
+                False,
+                f"create session http {r.status_code}: {r.text[:200]}",
+            )
+            return
+        sid = r.json()["id"]
+        q1 = _chat_sse(sid, {})
+        report.add("P2-3 真实进程首题（重启前）", bool(q1.strip()), f"sid={sid} q_len={len(q1)}")
+        if not q1.strip():
+            return
+
+        # 真实进程重启：SIGTERM 后同库同端口再起新进程
+        _stop(procs[-1])
+        conn = _open_db()
+        n_sess = conn.execute("SELECT count(*) FROM sessions WHERE id=?", (sid,)).fetchone()[0]
+        n_ck = conn.execute(
+            "SELECT count(*) FROM checkpoints WHERE thread_id=?", (sid,)
+        ).fetchone()[0]
+        conn.close()
+        if not (n_sess >= 1 and n_ck >= 1):
+            report.add(
+                "P2-3 真实进程重启续答",
+                False,
+                f"杀进程后落盘缺失 sess={n_sess} ck={n_ck}（临时库 {db}）",
+            )
+            return
+        _start()
+        if not _healthy():
+            report.add("P2-3 真实进程重启续答", False, "重启子进程 /health 未就绪")
+            return
+
+        # 会话历史跨真实重启恢复
+        hist = requests.get(f"{base}/api/sessions/{sid}/messages", timeout=15)
+        if hist.status_code != 200:
+            report.add(
+                "P2-3 真实进程重启续答",
+                False,
+                f"重启后取历史 http {hist.status_code}: {hist.text[:200]}",
+            )
+            return
+        msgs = hist.json().get("messages", [])
+        hist_text = "\n".join(f"{m.get('role')}:{m.get('content', '')}" for m in msgs)
+        # 流式 token 可能含跟上额外续写片段；以首题「首个完整句子/行」判断其是否跨重启存活
+        q1_head = q1.strip().split("\n", 1)[0].strip()
+        restored = len(msgs) >= 1 and len(q1_head) >= 4 and q1_head in hist_text
+        report.add(
+            "P2-3 重启后会话历史恢复",
+            restored,
+            f"msgs={len(msgs)} q1_head={q1_head[:50]!r}",
+        )
+
+        # 真实 LLM 续答：同会话提交回答 → 应产出下一题（证明带历史续答链路走通）
+        answer = "我使用 Redis 作为缓存，主要做热点数据缓存和分布式锁。"
+        q2 = _chat_sse(sid, {"answer": answer})
+        report.add(
+            "P2-3 重启后真实 LLM 续答",
+            bool(q2.strip()),
+            f"q2_len={len(q2)}",
+        )
+    finally:
+        for p in list(procs):
+            _stop(p)
+        for _ in range(5):  # Windows：进程句柄 release 延迟，unlink 重试
+            try:
+                db.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                _time.sleep(0.8)
+
+
+def p2_4r(cfg) -> None:
+    """P2-4 修复：真实博查 Key / HTTP 出网验收门禁。
+
+    修复前从未用真实 Key 真实出网（仅占位 Key + patrol search 补丁）。本项在本机
+    配置真实博查 Key（env BOCHA_API_KEY，或 fallback cfg.verify.api_key）时，不经
+    任何补丁对真实服务发起一次搜索；BochaError（Key/网络/异常）视为真实 FAIL。
+    未配置 Key 时 dep 跳过。
+    """
+    import os
+
+    from app.verify.bocha import BochaClient, BochaError
+
+    key = os.getenv("BOCHA_API_KEY", "") or str(getattr(cfg.verify, "api_key", "") or "")
+    if not key:
+        _add_dep(
+            "P2-4 博查真实出网",
+            "未配置 BOCHA_API_KEY / cfg.verify.api_key（需真实博查 Key；非应用缺陷）",
+        )
+        return
+    client = BochaClient(key)
+    try:
+        results = client.search("Redis 持久化机制", count=3)
+    except BochaError as e:
+        report.add("P2-4 博查真实出网", False, f"BochaError={e}")
+        return
+    ok = len(results) >= 1 and all(bool(getattr(r, "url", "")) for r in results)
+    report.add(
+        "P2-4 博查真实出网",
+        ok,
+        f"real_http=urllib hits={len(results)} first={results[0].title[:40] if results else 'n/a'}",
+    )
+
+
+# ---------------------------------------------------------------------------
 # 清理
 # ---------------------------------------------------------------------------
 
@@ -997,21 +1536,40 @@ def main() -> None:
         "--only",
         default="all",
         nargs="+",
-        choices=["p2-1", "p2-2", "p2-3", "p2-4", "p2-5", "all"],
+        choices=[
+            "p2-1",
+            "p2-2",
+            "p2-2r",
+            "p2-3",
+            "p2-3r",
+            "p2-4",
+            "p2-4r",
+            "p2-5",
+            "p2-9",
+            "all",
+        ],
     )
     ap.add_argument("--keep", action="store_true")
     args = ap.parse_args()
 
-    checks = ["p2-1", "p2-2", "p2-3", "p2-4", "p2-5"] if "all" in args.only else args.only
+    checks = (
+        ["p2-1", "p2-2", "p2-2r", "p2-3", "p2-3r", "p2-4", "p2-4r", "p2-5", "p2-9"]
+        if "all" in args.only
+        else args.only
+    )
     cfg = load_config()
 
     with TestClient(app) as client:
         steps = {
             "p2-1": lambda: p2_1(client, cfg),
             "p2-2": lambda: p2_2(client, cfg),
+            "p2-2r": lambda: p2_2_real_relevance(client, cfg),
             "p2-3": lambda: p2_3(cfg),
+            "p2-3r": lambda: p2_3r(cfg),
             "p2-4": lambda: p2_4(client, cfg),
+            "p2-4r": lambda: p2_4r(cfg),
             "p2-5": lambda: p2_5(client, cfg),
+            "p2-9": lambda: p2_9(cfg),
         }
         try:
             for name in checks:

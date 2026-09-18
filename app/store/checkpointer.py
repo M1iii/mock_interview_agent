@@ -15,7 +15,9 @@ MemorySaver 仅保留为测试/无配置回退。
 且所有调用方（chat / finish / skip-last）每次都会重新注入 Key。
 """
 
+import json
 import sqlite3
+from pathlib import Path
 from typing import Any
 
 from langgraph.checkpoint.base import ChannelVersions, Checkpoint, CheckpointMetadata
@@ -121,3 +123,84 @@ def delete_thread(checkpointer, thread_id: str) -> None:
     MemorySaver / SqliteSaver 均实现 delete_thread（langgraph 1.x per-thread 接口）。
     """
     checkpointer.delete_thread(thread_id)
+
+
+def _cleanse_sensitive(value: Any) -> Any:
+    """递归剔除敏感项（既删字典**键**也删列表**项**），用于历史库自愈。
+
+    运行时 `strip_sensitive` 只删字典键（`updated_channels` 由 put() 单独清洗）；
+    历史脏数据可能在 `updated_channels` 等**列表**里残留 `_api_key` 通道名，
+    故自愈需同时删键与列表项。不修改入参，返回新对象。
+    """
+    if isinstance(value, dict):
+        return {k: _cleanse_sensitive(v) for k, v in value.items() if k not in SENSITIVE_STATE_KEYS}
+    if isinstance(value, list):
+        return [
+            _cleanse_sensitive(v)
+            for v in value
+            if not (isinstance(v, str) and v in SENSITIVE_STATE_KEYS)
+        ]
+    return value
+
+
+def scrub_history_db(db_path: str | Path) -> dict[str, int]:
+    """启动自愈：清理由修复前旧版写入的明文 API Key（data/ 本地历史库，幂等）。
+
+    `SanitizingSqliteSaver` 修复后新写不再落盘 `_api_key`；但修复前的历史数据
+    仍残留在 SQLite：`writes` 表存在 `channel='_api_key'` 的行（该通道值即裸 Key），
+    `checkpoints` 表的 checkpoint 页里也有含 `_api_key` 的旧页。本函数：
+    1. 删除 `writes` 中 `_api_key` 通道的行——读回端 Key 由 `KeyStore` 每次重新注入，
+       该通道无需落盘，删除安全；
+    2. 对 checkpoint 做 serde 往返，经 `strip_sensitive` 剔除 `_api_key` 后重写，
+       同步清洗 metadata 的敏感键与 `updated_channels` 通道名。
+
+    传入 db 不存在或单行解析失败均不阻断（返回/跳过），保证启动路径不因脏历史崩溃。
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return {"deleted_writes": 0, "rewritten_checkpoints": 0}
+    serde = SanitizedSerde()
+    conn = sqlite3.connect(str(db_path))
+    stats = {"deleted_writes": 0, "rewritten_checkpoints": 0}
+    try:
+        stats["deleted_writes"] = conn.execute(
+            "DELETE FROM writes WHERE channel = '_api_key'"
+        ).rowcount
+        rows = conn.execute("SELECT rowid, type, checkpoint, metadata FROM checkpoints").fetchall()
+        for rid, typ, blob, meta in rows:
+            changed = False
+            try:
+                decoded = serde.loads_typed((typ, blob))
+            except Exception:  # noqa: BLE001 - 无法解析的旧行跳过，不阻断自愈
+                continue
+            stripped = _cleanse_sensitive(decoded)
+            if stripped != decoded:
+                new_blob = serde.dumps_typed((typ, stripped))[1]
+                conn.execute("UPDATE checkpoints SET checkpoint=? WHERE rowid=?", (new_blob, rid))
+                changed = True
+            try:
+                meta_text = meta if isinstance(meta, str) else meta.decode("utf-8")
+                meta_obj = json.loads(meta_text)
+                meta_old = dict(meta_obj)
+                meta_obj = strip_sensitive(meta_obj)
+                if isinstance(meta_obj.get("updated_channels"), list):
+                    meta_obj["updated_channels"] = [
+                        c for c in meta_obj["updated_channels"] if c not in SENSITIVE_STATE_KEYS
+                    ]
+                if meta_obj != meta_old:
+                    conn.execute(
+                        "UPDATE checkpoints SET metadata=? WHERE rowid=?",
+                        (json.dumps(meta_obj, ensure_ascii=False), rid),
+                    )
+                    changed = True
+            except Exception:  # noqa: BLE001 - metadata 解析失败跳过
+                pass
+            if changed:
+                stats["rewritten_checkpoints"] += 1
+        conn.commit()
+    except Exception:  # noqa: BLE001 - 自愈失败不阻断启动（交由上层提示）
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return stats
